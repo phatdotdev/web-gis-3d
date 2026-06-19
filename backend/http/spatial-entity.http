@@ -1,0 +1,57 @@
+@baseUrl = http://localhost:3000/api
+
+@layerId = 69eea173-bad9-48e2-8810-cf470fd547a3
+
+@entityId = 7c5a630b-1f9d-4293-9f79-7283731b6302
+
+@newLayerId = 123e4567-e89b-12d3-a456-426614174000
+
+### Create spatial entity
+POST {{baseUrl}}/spatial-entities
+Content-Type: application/json
+
+{
+	"layerId": "{{layerId}}",
+	"name": "Tree A",
+	"type": "tree",
+	"renderType": "point",
+	"geometry": {
+        "type": "Point",
+        "coordinates": [106.6605, 10.7629]
+    },
+	"height": 6,
+	"iconUrl": "https://example.com/icons/tree.png",
+	"color": "#2e7d32",
+	"opacity": 0.9,
+	"metadata": {
+		"species": "oak"
+	}
+}
+
+### Get all spatial entities
+GET {{baseUrl}}/spatial-entities
+
+### Get one spatial entity
+GET {{baseUrl}}/spatial-entities/{{entityId}}
+
+### Update spatial entity
+PATCH {{baseUrl}}/spatial-entities/{{entityId}}
+Content-Type: application/json
+
+{
+	"name": "Tree A - updated",
+	"height": 7,
+	"color": "#1b5e20",
+	"opacity": 0.85
+}
+
+### Move spatial entity to another layer
+PATCH {{baseUrl}}/spatial-entities/{{entityId}}
+Content-Type: application/json
+
+{
+	"layerId": "{{newLayerId}}"
+}
+
+### Delete spatial entity
+DELETE {{baseUrl}}/spatial-entities/{{entityId}}

@@ -1,0 +1,127 @@
+@baseUrl = http://localhost:3000/api
+@layerId = 69eea173-bad9-48e2-8810-cf470fd547a3
+@entityId = 1c2d3e4f-5678-90ab-cdef-1234567890ab
+
+### Create layer
+POST {{baseUrl}}/layers
+Content-Type: application/json
+
+{
+	"name": "ong_thoat_nuoc",
+	"type": "vector",
+	"visible": true,
+	"minZoom": 0,
+	"maxZoom": 24,
+	"zIndex": 1,
+	"metadata": {
+		"source": "osm",
+		"style": "default"
+	}
+}
+
+### Upload GeoJSON layer
+POST {{baseUrl}}/layers/upload-geojson
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="name"
+
+đường ống nước
+--boundary
+Content-Disposition: form-data; name="type"
+
+geojson
+--boundary
+Content-Disposition: form-data; name="visible"
+
+true
+--boundary
+Content-Disposition: form-data; name="minZoom"
+
+0
+--boundary
+Content-Disposition: form-data; name="maxZoom"
+
+24
+--boundary
+Content-Disposition: form-data; name="zIndex"
+
+2
+--boundary
+Content-Disposition: form-data; name="metadata"
+
+{"source":"upload","style":"default"}
+--boundary
+Content-Disposition: form-data; name="file"; filename="cong_thoat_nuoc.geojson"
+Content-Type: application/json
+
+< D:\thuc_tap_cusc\DIGITAL_ASSET\WebGIS3D_BE\raw\_SoXayDung_QHPK_CongThoatNuoc_L0_Quy_hoạch_phân_khu___Cống_thoát_nước.geojson
+--boundary--
+
+### Get all layers
+GET {{baseUrl}}/layers
+
+### Get one layer
+GET {{baseUrl}}/layers/{{layerId}}
+
+### Update layer
+PATCH {{baseUrl}}/layers/{{layerId}}
+Content-Type: application/json
+
+{
+	"name": "buildings_2d",
+	"visible": false,
+	"zIndex": 3
+}
+
+### Delete layer
+DELETE {{baseUrl}}/layers/{{layerId}}
+
+### Create spatial entity in layer
+POST {{baseUrl}}/spatial-entities
+Content-Type: application/json
+
+{
+	"layerId": "{{layerId}}",
+	"name": "Building A",
+	"type": "building",
+	"renderType": "polygon",
+	"geometry": {
+		"type": "Polygon",
+		"coordinates": [
+			[
+				[106.6601, 10.7626],
+				[106.6611, 10.7626],
+				[106.6611, 10.7636],
+				[106.6601, 10.7636],
+				[106.6601, 10.7626]
+			]
+		]
+	},
+	"height": 30,
+	"color": "#cccccc",
+	"opacity": 0.85,
+	"metadata": {
+		"floors": 8
+	}
+}
+
+### Get all spatial entities
+GET {{baseUrl}}/spatial-entities
+
+### Get one spatial entity
+GET {{baseUrl}}/spatial-entities/{{entityId}}
+
+### Update spatial entity
+PATCH {{baseUrl}}/spatial-entities/{{entityId}}
+Content-Type: application/json
+
+{
+	"name": "Building A - updated",
+	"height": 36,
+	"color": "#aaaaaa",
+	"opacity": 0.9
+}
+
+### Delete spatial entity
+DELETE {{baseUrl}}/spatial-entities/{{entityId}}
