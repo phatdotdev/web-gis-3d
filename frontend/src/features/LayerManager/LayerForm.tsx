@@ -42,6 +42,9 @@ const inputClasses =
 const labelClasses =
   "text-[11.5px] font-semibold text-[#64748b] tracking-[0.1px]";
 
+const resolveMetadataColor = (metadata?: BackendLayer["metadata"]) =>
+  typeof metadata?.color === "string" ? metadata.color : "#ef4444";
+
 export const LayerForm: React.FC<Props> = ({ layer, onClose }) => {
   const dispatch = useAppDispatch();
   const layerStatus = useAppSelector(selectLayerStatus);
@@ -66,7 +69,7 @@ export const LayerForm: React.FC<Props> = ({ layer, onClose }) => {
       scale: layer?.scale ?? 1,
       height: layer?.height ?? 0,
       dataUrl: layer?.dataUrl ?? "",
-      color: layer?.metadata?.color ?? "#ef4444",
+      color: resolveMetadataColor(layer?.metadata),
     },
   });
 
@@ -83,7 +86,7 @@ export const LayerForm: React.FC<Props> = ({ layer, onClose }) => {
         scale: layer.scale ?? 1,
         height: layer.height ?? 0,
         dataUrl: layer.dataUrl ?? "",
-        color: layer.metadata?.color ?? "#ef4444",
+        color: resolveMetadataColor(layer.metadata),
       });
     }
   }, [layer, reset]);

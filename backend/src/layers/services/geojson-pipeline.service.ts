@@ -41,7 +41,11 @@ export class GeoJsonPipelineService {
     const geometryType = representative?.geometry?.type ?? 'Point';
     const representativeProperties = representative?.properties ?? {};
 
-    const renderer = this.renderGenerator.buildRenderer(geometryType, representativeProperties);
+    const renderer = this.renderGenerator.buildRenderer(
+      geometryType,
+      representativeProperties,
+      processedFeatures,
+    );
     const popupTemplate = this.renderGenerator.buildPopupTemplate(processedFeatures);
 
     const featureCollection = {

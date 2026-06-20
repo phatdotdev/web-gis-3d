@@ -6,6 +6,7 @@ import {
   PenTool,
   RotateCw,
   Save,
+  Scissors,
   Square,
   Trash2,
   X,
@@ -19,15 +20,14 @@ import {
   selectEditorGroundColor,
   selectEditorModels,
   selectEditorOpen,
-  selectEditorSliceTiltX,
-  selectEditorSliceTiltY,
-  selectEditorSliceTiltZ,
   selectEditorSceneServiceUrl,
   selectEditorSelectedFeature,
   selectEditorSelectedModel,
   selectEditorSliceDoorsRed,
   selectEditorSliceEnabled,
   selectEditorSliceExcludeDoors,
+  selectEditorSliceHeading,
+  selectEditorSliceTilt,
   selectEditorTool,
   setEditorExtrudeColor,
   setEditorGroundColor,
@@ -38,10 +38,8 @@ import {
   setEditorSliceDoorsRed,
   setEditorSliceEnabled,
   setEditorSliceExcludeDoors,
-  setEditorSliceTiltX,
-  setEditorSliceTiltY,
-  setEditorSliceTiltZ,
-  setEditorSliceViewerOpen,
+  setEditorSliceHeading,
+  setEditorSliceTilt,
   setEditorTool,
   type EditorFeatureState,
   type EditorTool,
@@ -93,9 +91,8 @@ export const ThreeDEditorPanel: React.FC = () => {
   const sliceEnabled = useAppSelector(selectEditorSliceEnabled);
   const sliceExcludeDoors = useAppSelector(selectEditorSliceExcludeDoors);
   const sliceDoorsRed = useAppSelector(selectEditorSliceDoorsRed);
-  const sliceTiltX = useAppSelector(selectEditorSliceTiltX);
-  const sliceTiltY = useAppSelector(selectEditorSliceTiltY);
-  const sliceTiltZ = useAppSelector(selectEditorSliceTiltZ);
+  const sliceHeading = useAppSelector(selectEditorSliceHeading);
+  const sliceTilt = useAppSelector(selectEditorSliceTilt);
   const [form, setForm] = useState<FormState>(() => readFeatureForm(null));
 
   useEffect(() => {
@@ -145,6 +142,19 @@ export const ThreeDEditorPanel: React.FC = () => {
         title="3D Editor"
       >
         <PenTool size={15} />
+      </button>
+
+      <button
+        className={cn(
+          "fixed top-[101px] right-[15px] w-8 h-8 bg-white border rounded shadow-[0_1px_3px_rgba(0,0,0,0.15)] cursor-pointer flex items-center justify-center z-[820] transition-all focus:outline-none focus:ring-2 focus:ring-[#f97316]",
+          sliceEnabled
+            ? "border-[#f97316] text-[#ea580c] bg-[#fff7ed]"
+            : "border-[#cfd3da] text-[#6a6e79] hover:bg-[#f6f7f9]",
+        )}
+        onClick={() => dispatch(setEditorSliceEnabled(!sliceEnabled))}
+        title={sliceEnabled ? "Tắt Slice" : "Bật Slice và chọn vị trí"}
+      >
+        <Scissors size={15} />
       </button>
 
       <aside
@@ -212,7 +222,7 @@ export const ThreeDEditorPanel: React.FC = () => {
 
           <section className="flex flex-col gap-2 border border-[#e2e8f0] rounded-lg p-3 bg-white">
             <div className="text-[11px] font-bold text-[#475569] uppercase tracking-wide">
-              Scene Service / Slice
+              Scene Service
             </div>
             <select
               className={inputClasses + " font-sans"}
@@ -240,76 +250,6 @@ export const ThreeDEditorPanel: React.FC = () => {
               <input
                 type="checkbox"
                 className="w-4 h-4 accent-[#2563eb]"
-                checked={sliceEnabled}
-                onChange={(event) => {
-                  dispatch(setEditorSliceEnabled(event.target.checked));
-                  if (event.target.checked) {
-                    dispatch(setEditorSliceViewerOpen(true));
-                  }
-                }}
-              />
-              Bật Slice widget
-            </label>
-
-            {sliceEnabled && (
-              <div className="flex flex-col gap-2 mt-1 mb-1 pl-2 border-l-2 border-[#2563eb]">
-                <div className="flex flex-col gap-1">
-                  <div className="flex justify-between items-center">
-                    <label className={labelClasses}>Xoay X (Tilt): {Math.round(sliceTiltX)}°</label>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="360"
-                    step="1"
-                    value={sliceTiltX}
-                    onChange={(e) => dispatch(setEditorSliceTiltX(Number(e.target.value)))}
-                    className="w-full accent-[#2563eb]"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <div className="flex justify-between items-center">
-                    <label className={labelClasses}>Xoay Y (Heading): {Math.round(sliceTiltY)}°</label>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="360"
-                    step="1"
-                    value={sliceTiltY}
-                    onChange={(e) => dispatch(setEditorSliceTiltY(Number(e.target.value)))}
-                    className="w-full accent-[#2563eb]"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <div className="flex justify-between items-center">
-                    <label className={labelClasses}>Xoay Z (Roll): {Math.round(sliceTiltZ)}°</label>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="360"
-                    step="1"
-                    value={sliceTiltZ}
-                    onChange={(e) => dispatch(setEditorSliceTiltZ(Number(e.target.value)))}
-                    className="w-full accent-[#2563eb]"
-                  />
-                </div>
-                
-                <button
-                  type="button"
-                  onClick={() => dispatch(setEditorSliceViewerOpen(true))}
-                  className="mt-1 flex items-center justify-center gap-1.5 py-1.5 px-3 text-[11px] font-bold border border-[#dbeafe] rounded cursor-pointer bg-[#eff6ff] text-[#1d4ed8] hover:bg-[#dbeafe]"
-                >
-                  🔍 Mở Viewer 3D riêng
-                </button>
-              </div>
-            )}
-
-            <label className="flex items-center gap-2 text-[12px] text-[#334155]">
-              <input
-                type="checkbox"
-                className="w-4 h-4 accent-[#2563eb]"
                 checked={sliceExcludeDoors}
                 onChange={(event) => dispatch(setEditorSliceExcludeDoors(event.target.checked))}
               />
@@ -324,6 +264,48 @@ export const ThreeDEditorPanel: React.FC = () => {
               />
               Đổi Doors sang đỏ
             </label>
+            {sliceEnabled && (
+              <div className="flex flex-col gap-2 pt-2 border-t border-[#e2e8f0]">
+                <div className="flex items-center justify-between gap-2">
+                  <label className={labelClasses}>Xoay ngang</label>
+                  <input
+                    type="number"
+                    className="w-16 h-7 px-2 border border-[#d7dbe3] rounded-md text-[11px] font-mono"
+                    value={sliceHeading}
+                    min={0}
+                    max={360}
+                    onChange={(event) => dispatch(setEditorSliceHeading(normalizeNumber(event.target.value, 0)))}
+                  />
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={360}
+                  step={1}
+                  value={sliceHeading}
+                  onChange={(event) => dispatch(setEditorSliceHeading(normalizeNumber(event.target.value, 0)))}
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <label className={labelClasses}>Nghiêng mặt cắt</label>
+                  <input
+                    type="number"
+                    className="w-16 h-7 px-2 border border-[#d7dbe3] rounded-md text-[11px] font-mono"
+                    value={sliceTilt}
+                    min={0}
+                    max={180}
+                    onChange={(event) => dispatch(setEditorSliceTilt(normalizeNumber(event.target.value, 90)))}
+                  />
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={180}
+                  step={1}
+                  value={sliceTilt}
+                  onChange={(event) => dispatch(setEditorSliceTilt(normalizeNumber(event.target.value, 90)))}
+                />
+              </div>
+            )}
           </section>
 
           <section className="grid grid-cols-2 gap-2">

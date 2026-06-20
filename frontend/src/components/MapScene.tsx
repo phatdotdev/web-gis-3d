@@ -43,9 +43,8 @@ import {
   selectEditorSliceDoorsRed,
   selectEditorSliceEnabled,
   selectEditorSliceExcludeDoors,
-  selectEditorSliceTiltX,
-  selectEditorSliceTiltY,
-  selectEditorSliceTiltZ,
+  selectEditorSliceHeading,
+  selectEditorSliceTilt,
   selectEditorTool,
   selectEditorUpdateRequest,
   selectSceneEditMode,
@@ -62,7 +61,8 @@ import {
   setSceneEditingNodeId,
   selectPlacementFileUrl,
 } from "../store/mapSlice";
-import { createBackendLayer } from "../layers/backendLayer";
+import { createBackendLayer, getMapPinIcon, MODEL_DETAIL_SCALE } from "../layers/backendLayer";
+import { getEntityCenter } from "../utils/geometry";
 import { loadBasemapStyles } from "../utils/basemapStyles";
 import type { TerrainMode } from "../types/map";
 import {
@@ -74,7 +74,7 @@ import {
   fetchSceneById,
 } from "../utils/backendApi";
 import { usePlacementMode } from "../hooks/usePlacementMode";
-import type { BackendLayer, BackendSpatialEntity } from "../types/backend";
+import type { BackendSpatialEntity } from "../types/backend";
 
 const applyTerrain = (map: Map, terrain: TerrainMode) => {
   if (terrain === "flat") {
@@ -84,65 +84,6 @@ const applyTerrain = (map: Map, terrain: TerrainMode) => {
   map.ground = terrain;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   map.ground.navigationConstraint = { type: "none" } as any;
-};
-
-const buildFeatureProperties = (entity: BackendSpatialEntity) => ({
-  ...(entity.metadata ?? {}),
-  id: entity.id,
-  name: entity.name,
-  type: entity.type,
-  renderType: entity.renderType,
-  elevation: entity.elevation ?? 0,
-  height: entity.height ?? 0,
-  width: entity.width ?? 1,
-  color: entity.color,
-  opacity: entity.opacity ?? 1,
-  scaleX: entity.scaleX ?? entity.scale ?? 1,
-  scaleY: entity.scaleY ?? entity.scale ?? 1,
-  scaleZ: entity.scaleZ ?? entity.scale ?? 1,
-  rotationX: entity.rotationX ?? 0,
-  rotationY: entity.rotationY ?? 0,
-  rotationZ: entity.rotationZ ?? 0,
-  modelId: entity.model?.id ?? entity.modelId ?? null,
-  sceneId: entity.scene?.id ?? entity.sceneId ?? null,
-  modelUrl: entity.modelUrl ?? entity.model?.assetUrl ?? null,
-});
-
-const buildIndependentLayer = (entities: BackendSpatialEntity[]): BackendLayer | null => {
-  const standaloneEntities = entities.filter((entity) => !entity.scene?.id && !entity.sceneId);
-  if (standaloneEntities.length === 0) return null;
-
-  return {
-    id: "__independent_entities__",
-    name: "Features độc lập",
-    type: "Point",
-    visible: true,
-    minZoom: 0,
-    maxZoom: 24,
-    zIndex: 9999,
-    elevation: 0,
-    scale: 1,
-    height: 0,
-    modelUrl: null,
-    iconUrl: null,
-    dataUrl: null,
-    metadata: { color: "#2563eb" },
-    entities: standaloneEntities,
-    featureCollection: {
-      type: "FeatureCollection",
-      features: standaloneEntities.map((entity) => ({
-        type: "Feature",
-        geometry: entity.geometry,
-        properties: buildFeatureProperties(entity),
-      })),
-    },
-    renderer: null,
-    popupTemplate: {
-      title: "{name}",
-      content: "Feature độc lập - chưa thuộc layer dữ liệu.",
-    },
-    extent: null,
-  };
 };
 
 const getInspectableEntityId = (attributes: Record<string, unknown> | null | undefined) => {
@@ -166,6 +107,11 @@ const toResolvedEditorUrl = (href: string) => {
   return `${backendHost}${href.startsWith("/") ? "" : "/"}${href}`;
 };
 
+const toBackendUrl = (href: string) => {
+  if (href.startsWith("http")) return href;
+  return `${backendHost}${href.startsWith("/") ? "" : "/"}${href}`;
+};
+
 const modelSymbol = (href: string, size = 12, rotation = 0) => {
   return {
     type: "point-3d",
@@ -181,6 +127,14 @@ const modelSymbol = (href: string, size = 12, rotation = 0) => {
       },
     ],
   } as any;
+};
+
+const getEntityModelUrl = (entity: BackendSpatialEntity) =>
+  entity.modelUrl || entity.assetUrl || entity.model?.assetUrl || null;
+
+const getEntityModelSize = (entity: BackendSpatialEntity) => {
+  const size = Number(entity.scaleX ?? entity.scale ?? entity.height ?? 12);
+  return Number.isFinite(size) && size > 0 ? size : 12;
 };
 
 const extrudeSymbol = (color: string, height = 15) =>
@@ -222,6 +176,15 @@ const activeVertexSymbol = {
   size: 9,
   outline: { color: "#ffffff", width: 1.5 },
 } as any;
+
+const applySliceRotation = (sliceWidget: Slice | null, heading: number, tilt: number) => {
+  const shape = sliceWidget?.viewModel.shape as any;
+  if (!sliceWidget || !shape) return;
+  sliceWidget.viewModel.tiltEnabled = true;
+  shape.heading = ((heading % 360) + 360) % 360;
+  shape.tilt = Math.max(0, Math.min(180, tilt));
+  sliceWidget.viewModel.shape = shape;
+};
 
 const makeEditorId = () => `editor-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 
@@ -351,9 +314,8 @@ const MapScene = () => {
   const editorSliceEnabled = useAppSelector(selectEditorSliceEnabled);
   const editorSliceExcludeDoors = useAppSelector(selectEditorSliceExcludeDoors);
   const editorSliceDoorsRed = useAppSelector(selectEditorSliceDoorsRed);
-  const editorSliceTiltX = useAppSelector(selectEditorSliceTiltX);
-  const editorSliceTiltY = useAppSelector(selectEditorSliceTiltY);
-  const editorSliceTiltZ = useAppSelector(selectEditorSliceTiltZ);
+  const editorSliceHeading = useAppSelector(selectEditorSliceHeading);
+  const editorSliceTilt = useAppSelector(selectEditorSliceTilt);
   const editorUpdateRequest = useAppSelector(selectEditorUpdateRequest);
   const editorDeleteRequest = useAppSelector(selectEditorDeleteRequest);
   const sceneEditMode = useAppSelector(selectSceneEditMode);
@@ -376,8 +338,10 @@ const MapScene = () => {
   const sliceWidgetRef = useRef<Slice | null>(null);
   const doorsSublayerRef = useRef<any>(null);
   const sceneLodLayerRef = useRef<GraphicsLayer | null>(null);
+  const positioningPinsLayerRef = useRef<GraphicsLayer | null>(null);
+  const independentModelLayerRef = useRef<GraphicsLayer | null>(null);
 
-  const { reloadScenes } = useSceneLodLoader(viewRef, sceneLodLayerRef);
+  const { rootScenes, reloadScenes } = useSceneLodLoader(viewRef, sceneLodLayerRef);
 
   useSceneEditor(viewRef, sceneLodLayerRef, () => {
     void reloadScenes();
@@ -420,7 +384,13 @@ const MapScene = () => {
       center: [105.78, 10.04],
       zoom: 12,
     });
-    view.popupEnabled = true;
+    // @ts-ignore
+    view.highlightOptions = {
+      color: [0, 255, 255, 1],
+      haloOpacity: 0.9,
+      fillOpacity: 0.2,
+    };
+    view.popupEnabled = false;
 
     view
       .when(() => {
@@ -453,12 +423,33 @@ const MapScene = () => {
       elevationInfo: { mode: "absolute-height" },
       listMode: "hide",
     } as any);
-    map.addMany([editorGroundLayer, editorExtrudeLayer, editorModelLayer, sceneLodLayer]);
+    const positioningPinsLayer = new GraphicsLayer({
+      title: "Positioning pins for independent entities & scenes",
+      elevationInfo: { mode: "relative-to-ground" },
+      maxScale: MODEL_DETAIL_SCALE,
+      listMode: "hide",
+    } as any);
+    const independentModelLayer = new GraphicsLayer({
+      title: "Independent spatial entity 3D models",
+      elevationInfo: { mode: "relative-to-ground" },
+      minScale: MODEL_DETAIL_SCALE,
+      listMode: "hide",
+    } as any);
+    map.addMany([
+      editorGroundLayer,
+      editorExtrudeLayer,
+      editorModelLayer,
+      sceneLodLayer,
+      positioningPinsLayer,
+      independentModelLayer,
+    ]);
 
     editorGroundLayerRef.current = editorGroundLayer;
     editorExtrudeLayerRef.current = editorExtrudeLayer;
     editorModelLayerRef.current = editorModelLayer;
     sceneLodLayerRef.current = sceneLodLayer;
+    positioningPinsLayerRef.current = positioningPinsLayer;
+    independentModelLayerRef.current = independentModelLayer;
 
     const sketchViewModel = new SketchViewModel({
       view,
@@ -582,8 +573,12 @@ const MapScene = () => {
           editorExtrudeLayer,
           editorModelLayer,
           sceneLodLayer,
+          positioningPinsLayer,
+          independentModelLayer,
         ]);
       }
+      positioningPinsLayerRef.current = null;
+      independentModelLayerRef.current = null;
       dataLayersRef.current = [];
       sketchCreateHandle.remove();
       sketchUpdateHandle.remove();
@@ -696,26 +691,29 @@ const MapScene = () => {
         view,
         visible: false,
       });
+      sliceWidgetRef.current.viewModel.tiltEnabled = true;
       view.ui.add(sliceWidgetRef.current, "top-right");
     }
 
-    sliceWidgetRef.current.visible = editorSliceEnabled;
+    const sliceWidget = sliceWidgetRef.current;
+
+    if (editorSliceEnabled) {
+      sliceWidget.visible = true;
+      sliceWidget.viewModel.tiltEnabled = true;
+      void sliceWidget.viewModel.start().then(() => {
+        applySliceRotation(sliceWidget, editorSliceHeading, editorSliceTilt);
+      }).catch((err) => {
+        console.error("Failed to start slice placement:", err);
+      });
+    } else {
+      sliceWidget.visible = false;
+      sliceWidget.viewModel.clear();
+    }
   }, [editorSliceEnabled]);
 
-  // Sync Slice Plane Rotations (Tilt, Heading)
   useEffect(() => {
-    const sliceWidget = sliceWidgetRef.current;
-    if (!sliceWidget || !sliceWidget.viewModel.shape) return;
-    
-    // @ts-ignore - Ignore ArcGIS type limitations, tilt and heading are supported for Plane
-    sliceWidget.viewModel.shape.tilt = editorSliceTiltX;
-    // @ts-ignore
-    sliceWidget.viewModel.shape.heading = editorSliceTiltY;
-    // Note: ArcGIS JS API Slice Plane không trực tiếp support "roll" (Z axis) bằng thuộc tính public trên shape, 
-    // cần áp dụng ma trận biến đổi (matrix transform) nếu API cho phép, hoặc xoay camera/geometry
-    // Ở bản nâng cấp này, Y, X đã map vào heading, tilt. Chiều Z (Roll) cần workaround hoặc dùng thư viện phụ trợ.
-    
-  }, [editorSliceTiltX, editorSliceTiltY, editorSliceTiltZ]);
+    applySliceRotation(sliceWidgetRef.current, editorSliceHeading, editorSliceTilt);
+  }, [editorSliceHeading, editorSliceTilt]);
 
   useEffect(() => {
     const sliceWidget = sliceWidgetRef.current;
@@ -751,30 +749,37 @@ const MapScene = () => {
     if (!map || !view) return;
 
     const selectedIds = new Set(selectedLayerIds);
-    const independentLayer = buildIndependentLayer(independentEntities);
-    const nextLayers = layers
+    const renderLayers = layers
       .filter((layer) => selectedIds.has(layer.id))
       .sort((a, b) => a.zIndex - b.zIndex);
-    const renderLayers = independentLayer ? [...nextLayers, independentLayer] : nextLayers;
 
     const currentLayers: GeoJSONLayer[] = [];
     const currentBlobs: string[] = [];
 
-    if (renderLayers.length > 0) {
-      const created = renderLayers.map((layer) =>
-        createBackendLayer(layer, show3DModels, showPositioningIcons),
-      );
-      created.forEach(({ layers, blobUrls }) => {
-        map.addMany(layers);
-        currentLayers.push(...layers);
-        currentBlobs.push(...blobUrls);
-      });
-    }
-
     let active = true;
+    const controller = new AbortController();
+
+    const hydratePointLayer = async (layer: (typeof renderLayers)[number]) => {
+      const isPointLayer = layer.type.toLowerCase() === "point" || layer.type === "Point";
+      if (!isPointLayer || layer.featureCollection || !layer.featureCollectionUrl) return layer;
+
+      try {
+        const response = await fetch(toBackendUrl(layer.featureCollectionUrl), {
+          signal: controller.signal,
+        });
+        if (!response.ok) return layer;
+        return {
+          ...layer,
+          featureCollection: await response.json(),
+        };
+      } catch {
+        return layer;
+      }
+    };
+
     const updateExtent = () => {
       if (!active || currentLayers.length === 0) return;
-      const extents = nextLayers
+      const extents = renderLayers
         .map((layer) => layer.extent)
         .filter((extent): extent is NonNullable<typeof extent> =>
           Boolean(extent),
@@ -800,37 +805,27 @@ const MapScene = () => {
       void view.goTo(extentGeometry.expand(1.2)).catch(() => undefined);
     };
 
-    updateExtent();
-
-    const handle = watch(() => view.zoom, () => {
+    const addRenderLayers = async () => {
+      if (renderLayers.length === 0) return;
+      const hydratedLayers = await Promise.all(renderLayers.map(hydratePointLayer));
       if (!active) return;
-      const zoom = view.zoom;
-      if (zoom == null) return;
-      
-      const isNear = zoom >= 17;
-      
-      currentLayers.forEach((layer) => {
-        if (layer.title === "Features độc lập") {
-          // Khi GẦN (zoom >= 17): hiện tất cả feature (kể cả con của scene)
-          // Khi XA (zoom < 17): chỉ hiện những feature KHÔNG thuộc scene (vì lúc này vỏ tòa nhà LOD 0 đang hiển thị)
-          layer.definitionExpression = isNear ? "1=1" : "sceneId IS NULL";
-        }
+
+      const created = hydratedLayers.map((layer) =>
+        createBackendLayer(layer, show3DModels, showPositioningIcons),
+      );
+      created.forEach(({ layers, blobUrls }) => {
+        map.addMany(layers);
+        currentLayers.push(...layers);
+        currentBlobs.push(...blobUrls);
       });
-    });
-    
-    // Initial apply
-    if (view.zoom != null) {
-      const isNear = view.zoom >= 17;
-      currentLayers.forEach((layer) => {
-        if (layer.title === "Features độc lập") {
-          layer.definitionExpression = isNear ? "1=1" : "sceneId IS NULL";
-        }
-      });
-    }
+      updateExtent();
+    };
+
+    void addRenderLayers();
 
     return () => {
       active = false;
-      handle.remove();
+      controller.abort();
       if (currentLayers.length > 0) {
         map.removeMany(currentLayers);
       }
@@ -841,7 +836,7 @@ const MapScene = () => {
         }, 5000);
       }
     };
-  }, [layers, independentEntities, selectedLayerIds, show3DModels, showPositioningIcons]);
+  }, [layers, selectedLayerIds, show3DModels, showPositioningIcons]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -852,13 +847,19 @@ const MapScene = () => {
       latitude: goToTarget.latitude,
     });
 
+    const targetObj: any = {
+      target: point,
+      tilt: 60,
+    };
+    if (goToTarget.scale != null) {
+      targetObj.scale = goToTarget.scale;
+    } else {
+      targetObj.zoom = goToTarget.zoom ?? 18;
+    }
+
     view
       .goTo(
-        {
-          target: point,
-          zoom: goToTarget.zoom ?? 18,
-          tilt: 60,
-        },
+        targetObj,
         { duration: 1500, easing: "ease-in-out" },
       )
       .then(() => dispatch(clearGoToTarget()))
@@ -899,6 +900,200 @@ const MapScene = () => {
       clickHandle.remove();
     };
   }, [pickingCoordinateActive, dispatch]);
+
+  // Highlight selected entity in ArcGIS View
+  const highlightHandleRef = useRef<any>(null);
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    // Clear previous highlight
+    if (highlightHandleRef.current) {
+      highlightHandleRef.current.remove();
+      highlightHandleRef.current = null;
+    }
+
+    if (!inspectedEntity) return;
+
+    let active = true;
+
+    const applyHighlight = async () => {
+      // 1. Search in 3D scene GraphicsLayers first
+      const graphicsLayers = [
+        sceneLodLayerRef.current,
+        independentModelLayerRef.current,
+        editorModelLayerRef.current,
+        editorGroundLayerRef.current,
+        editorExtrudeLayerRef.current,
+      ].filter((l): l is GraphicsLayer => Boolean(l));
+
+      for (const layer of graphicsLayers) {
+        const graphic = layer.graphics.find((g) => {
+          const attrs = g.attributes;
+          if (!attrs) return false;
+          return attrs.id === inspectedEntity.id ||
+                 attrs.entityId === inspectedEntity.id ||
+                 attrs.backendEntityId === inspectedEntity.id;
+        });
+
+        if (graphic && active) {
+          try {
+            const layerView = await view.whenLayerView(layer);
+            if (active) {
+              highlightHandleRef.current = (layerView as any).highlight(graphic);
+            }
+          } catch (err) {
+            console.error("Failed to highlight graphic in GraphicsLayer:", err);
+          }
+          return;
+        }
+      }
+
+      // 2. Search in main GeoJSONLayers (skip companion point/pin layers ending in " points")
+      const geojsonLayers = dataLayersRef.current;
+      for (const layer of geojsonLayers) {
+        if (layer.title && layer.title.endsWith(" points")) {
+          continue; // Skip the map pins companion layer, highlight actual spatial geometry instead!
+        }
+        try {
+          const layerView = await view.whenLayerView(layer);
+          const query = layer.createQuery();
+          query.where = `id = '${inspectedEntity.id}' OR entityId = '${inspectedEntity.id}' OR backendEntityId = '${inspectedEntity.id}'`;
+          
+          const results = await layer.queryFeatures(query);
+          if (results.features.length > 0 && active) {
+            highlightHandleRef.current = (layerView as any).highlight(results.features[0]);
+            return;
+          }
+        } catch (err) {
+          // Ignore query failures
+        }
+      }
+
+    };
+
+    void applyHighlight();
+
+    return () => {
+      active = false;
+      if (highlightHandleRef.current) {
+        highlightHandleRef.current.remove();
+        highlightHandleRef.current = null;
+      }
+    };
+  }, [inspectedEntity]);
+
+  useEffect(() => {
+    const pinsLayer = positioningPinsLayerRef.current;
+    const modelLayer = independentModelLayerRef.current;
+    if (!pinsLayer || !modelLayer) return;
+
+    pinsLayer.removeAll();
+    modelLayer.removeAll();
+
+    // 1. Add pins/models for spatial entities, independent of selected data layers
+    independentEntities.forEach((entity) => {
+      const center = getEntityCenter(entity.geometry);
+      if (!center) return;
+
+      if (showPositioningIcons) {
+        const color = entity.color || "#2563eb";
+        const symbol = {
+          type: "point-3d",
+          symbolLayers: [
+            {
+              type: "icon",
+              resource: { href: getMapPinIcon(color) },
+              size: 28,
+            },
+          ],
+        } as any;
+
+        pinsLayer.add(
+          new Graphic({
+            geometry: new Point({
+              longitude: center.lng,
+              latitude: center.lat,
+              z: entity.elevation ?? 0,
+            }),
+            symbol,
+            attributes: {
+              id: entity.id,
+              name: entity.name || "Spatial entity",
+              type: "spatial-entity",
+              backendEntityId: entity.id,
+            },
+            popupTemplate: {
+              title: "{name}",
+              content: "Spatial entity.",
+            },
+          }),
+        );
+      }
+
+      const modelUrl = getEntityModelUrl(entity);
+      if (!show3DModels || !modelUrl) return;
+
+      modelLayer.add(
+        new Graphic({
+          geometry: new Point({
+            longitude: center.lng,
+            latitude: center.lat,
+            z: entity.elevation ?? 0,
+          }),
+          symbol: modelSymbol(modelUrl, getEntityModelSize(entity), entity.rotationZ ?? 0),
+          attributes: {
+            id: entity.id,
+            entityId: entity.id,
+            backendEntityId: entity.id,
+            name: entity.name || "Spatial entity",
+            type: "spatial-entity",
+          },
+          popupTemplate: {
+            title: "{name}",
+            content: "Spatial entity model.",
+          },
+        }),
+      );
+    });
+
+    // 2. Add pins for root scenes
+    if (showPositioningIcons) rootScenes.forEach((scene) => {
+      if (!scene.position || !scene.visible) return;
+
+      const symbol = {
+        type: "point-3d",
+        symbolLayers: [
+          {
+            type: "icon",
+            resource: { href: getMapPinIcon("#10b981") },
+            size: 28,
+          },
+        ],
+      } as any;
+
+      const graphic = new Graphic({
+        geometry: new Point({
+          longitude: scene.position.x,
+          latitude: scene.position.y,
+          z: scene.position.z ?? 0,
+        }),
+        symbol,
+        attributes: {
+          id: scene.id,
+          name: scene.name || "Scene",
+          type: "scene-root",
+          backendSceneId: scene.id,
+        },
+        popupTemplate: {
+          title: "{name}",
+          content: "Scene 3D.",
+        },
+      });
+
+      pinsLayer.add(graphic);
+    });
+  }, [independentEntities, rootScenes, show3DModels, showPositioningIcons]);
 
   useEffect(() => {
     const sketchViewModel = sketchViewModelRef.current;
@@ -1190,6 +1385,12 @@ const MapScene = () => {
       let targetGraphic = sceneLodLayer.graphics.find(
         (g) => g.attributes?.id === targetId || g.attributes?.entityId === targetId
       );
+
+      if (!targetGraphic && independentModelLayerRef.current) {
+        targetGraphic = independentModelLayerRef.current.graphics.find(
+          (g) => g.attributes?.backendEntityId === targetId || g.attributes?.entityId === targetId
+        );
+      }
 
       if (!targetGraphic && editorModelLayerRef.current) {
         targetGraphic = editorModelLayerRef.current.graphics.find(

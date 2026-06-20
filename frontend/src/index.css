@@ -1,17 +1,42 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-mono: ui-monospace, Consolas, monospace;
-  --color-panel-bg: rgba(255, 255, 255, 0.95);
-  --color-panel-border: #d7dbe3;
-  --color-panel-muted: #6a6e79;
-  --color-panel-text: #151515;
-  --color-panel-accent: #007ac2;
-  --color-panel-accent-strong: #005e95;
-  --color-panel-surface: #f6f7f9;
-  --color-panel-input: #ffffff;
-  --color-panel-input-border: #cfd3da;
+
+  /* Esri Calcite Design System - Light Mode Tokens */
+  --color-calcite-bg-1: #F7F7F7;
+  --color-calcite-bg-2: #FFFFFF;
+  --color-calcite-bg-3: #F2F2F2;
+  --color-calcite-text-1: #141414;
+  --color-calcite-text-2: #4A4A4A;
+  --color-calcite-text-3: #6B6B6B;
+  --color-calcite-border-1: #D4D4D4;
+  --color-calcite-border-2: #DEDEDE;
+  --color-calcite-brand: #007AC2;
+  --color-calcite-brand-hover: #00619B;
+
+  /* Standard Border Radius Mappings */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 4px;
+  --radius-2xl: 4px;
+  --radius-3xl: 4px;
+  --radius-4xl: 4px;
+  --radius-sharp: 0px;
+
+  /* Backwards compatibility for panel styling */
+  --color-panel-bg: var(--color-calcite-bg-2);
+  --color-panel-border: var(--color-calcite-border-1);
+  --color-panel-muted: var(--color-calcite-text-3);
+  --color-panel-text: var(--color-calcite-text-1);
+  --color-panel-accent: var(--color-calcite-brand);
+  --color-panel-accent-strong: var(--color-calcite-brand-hover);
+  --color-panel-surface: var(--color-calcite-bg-1);
+  --color-panel-input: var(--color-calcite-bg-2);
+  --color-panel-input-border: var(--color-calcite-border-2);
 }
 
 html,

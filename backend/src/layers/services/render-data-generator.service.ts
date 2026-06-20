@@ -173,7 +173,7 @@ export class RenderDataGeneratorService {
       if (representativeCoord) {
         vertexFeatures.push({
           type: 'Feature',
-          id: `pin-${counter++}`,
+          id: feature.properties?.id ?? feature.id ?? `pin-${counter++}`,
           geometry: { type: 'Point', coordinates: representativeCoord },
           properties: feature.properties ?? {},
         });
@@ -188,14 +188,19 @@ export class RenderDataGeneratorService {
 
   private toPointSymbol(properties: any) {
     const symbolLayers: any[] = [];
+    const assetUrl = properties.assetUrl ?? properties.modelUrl ?? null;
+    const height = Math.max(properties.scaleZ ?? properties.scale ?? properties.height ?? 12, 1);
+    const width = Math.max(properties.scaleX ?? properties.scale ?? properties.width ?? height, 1);
+    const depth = Math.max(properties.scaleY ?? properties.scale ?? properties.depth ?? width, 1);
 
-    if (properties.assetUrl) {
+    if (assetUrl) {
       symbolLayers.push({
         type: 'object',
-        resource: { href: properties.assetUrl },
-        height: Math.max(properties.height ?? 1, 1),
-        width: Math.max(properties.width ?? 1, 1),
-        depth: Math.max(properties.height ?? 1, 1),
+        resource: { href: assetUrl },
+        height,
+        width,
+        depth,
+        heading: properties.rotationZ ?? properties.rotation ?? 0,
         anchor: 'bottom',
       });
     }
@@ -206,7 +211,7 @@ export class RenderDataGeneratorService {
         resource: { href: properties.iconUrl },
         size: Math.max(properties.width ?? 12, 8),
       });
-    } else if (!properties.assetUrl) {
+    } else if (!assetUrl) {
       symbolLayers.push({
         type: 'icon',
         resource: { href: DEFAULT_MAP_PIN_ICON },
@@ -217,6 +222,76 @@ export class RenderDataGeneratorService {
     return {
       type: 'point-3d',
       symbolLayers,
+    };
+  }
+
+  private pointVisualVariables() {
+    return [
+      {
+        type: 'size',
+        axis: 'width',
+        field: 'scaleX',
+        valueUnit: 'unknown',
+      },
+      {
+        type: 'size',
+        axis: 'depth',
+        field: 'scaleY',
+        valueUnit: 'unknown',
+      },
+      {
+        type: 'size',
+        axis: 'height',
+        field: 'scaleZ',
+        valueUnit: 'unknown',
+      },
+      {
+        type: 'rotation',
+        field: 'rotationZ',
+        rotationType: 'geographic',
+      },
+    ];
+  }
+
+  private buildPointRenderer(features: any[], representativeProperties: any): any {
+    const modelUrls = Array.from(
+      new Set(
+        features
+          .map((feature) => feature?.properties?.assetUrl ?? feature?.properties?.modelUrl)
+          .filter((url): url is string => typeof url === 'string' && url.length > 0),
+      ),
+    );
+
+    if (modelUrls.length === 0) {
+      return {
+        type: 'simple',
+        symbol: this.toPointSymbol(representativeProperties),
+      };
+    }
+
+    if (modelUrls.length === 1) {
+      return {
+        type: 'simple',
+        symbol: this.toPointSymbol({
+          ...representativeProperties,
+          assetUrl: modelUrls[0],
+        }),
+        visualVariables: this.pointVisualVariables(),
+      };
+    }
+
+    return {
+      type: 'unique-value',
+      field: 'assetUrl',
+      defaultSymbol: this.toPointSymbol(representativeProperties),
+      uniqueValueInfos: modelUrls.map((modelUrl) => ({
+        value: modelUrl,
+        symbol: this.toPointSymbol({
+          ...representativeProperties,
+          assetUrl: modelUrl,
+        }),
+      })),
+      visualVariables: this.pointVisualVariables(),
     };
   }
 
@@ -252,14 +327,11 @@ export class RenderDataGeneratorService {
     };
   }
 
-  buildRenderer(geometryType: string, representativeProperties: any): any {
+  buildRenderer(geometryType: string, representativeProperties: any, features: any[] = []): any {
     const color = this.resolveColor(representativeProperties.color, representativeProperties.opacity);
 
     if (geometryType.includes('Point')) {
-      return {
-        type: 'simple',
-        symbol: this.toPointSymbol(representativeProperties),
-      };
+      return this.buildPointRenderer(features, representativeProperties);
     }
 
     if (geometryType.includes('Line')) {

@@ -9,10 +9,15 @@ type LayerBuildResult = {
 
 type ColorTuple = [number, number, number, number];
 
-const getMapPinIcon = (color: string = "#ef4444") => {
+export const MODEL_DETAIL_SCALE = 2500;
+
+export const getMapPinIcon = (color: string = "#ef4444") => {
   const encodedColor = encodeURIComponent(color);
   return `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2264%22 viewBox=%220 0 48 64%22%3E%3Cfilter id=%22s%22 x=%22-30%25%22 y=%22-20%25%22 width=%22160%25%22 height=%22160%25%22%3E%3CfeDropShadow dx=%220%22 dy=%223%22 stdDeviation=%223%22 flood-color=%22%230f172a%22 flood-opacity=%22.28%22/%3E%3C/filter%3E%3Cpath filter=%22url(%23s)%22 d=%22M24 61s18-20.6 18-36C42 13.4 34 5 24 5S6 13.4 6 25c0 15.4 18 36 18 36Z%22 fill=%22${encodedColor}%22/%3E%3Ccircle cx=%2224%22 cy=%2225%22 r=%2212%22 fill=%22%23ffffff%22/%3E%3Ccircle cx=%2224%22 cy=%2225%22 r=%226%22 fill=%22%232563eb%22/%3E%3C/svg%3E`;
 };
+
+const resolveLayerColor = (layer: BackendLayer) =>
+  typeof layer.metadata?.color === "string" ? layer.metadata.color : "#ef4444";
 
 const resolveColor = (color?: string | null, opacity?: number | null): ColorTuple => {
   if (!color || typeof color !== "string") {
@@ -54,9 +59,30 @@ const resolveRendererUrls = (renderer: any): any => {
   return clone;
 };
 
+const rendererHasObjectSymbol = (renderer: any): boolean => {
+  if (!renderer || typeof renderer !== "object") return false;
+  if (Array.isArray(renderer)) return renderer.some(rendererHasObjectSymbol);
+  if (renderer.type === "object") return true;
+  return Object.values(renderer).some(rendererHasObjectSymbol);
+};
+
+const modelSymbol = (href: string | undefined) => ({
+  type: "point-3d",
+  symbolLayers: [
+    {
+      type: "object",
+      resource: { href },
+      height: 12,
+      width: 12,
+      depth: 12,
+      anchor: "bottom",
+    },
+  ],
+});
+
 export const createBackendLayer = (
   layer: BackendLayer,
-  _show3DModels = true,
+  show3DModels = true,
   showPositioningIcons = true,
 ): LayerBuildResult => {
   const layers: GeoJSONLayer[] = [];
@@ -90,31 +116,13 @@ export const createBackendLayer = (
         const resolvedModelUrl = resolveUrl(modelUrl);
         uniqueValueInfos.push({
           value: modelUrl,
-          symbol: {
-            type: "point-3d",
-            symbolLayers: [
-              {
-                type: "object",
-                resource: { href: resolvedModelUrl },
-                anchor: "bottom",
-              },
-            ],
-          },
+          symbol: modelSymbol(resolvedModelUrl),
         });
       });
 
       const defaultModelUrl = resolveUrl(layer.modelUrl);
       const defaultSymbol = defaultModelUrl
-        ? {
-            type: "point-3d",
-            symbolLayers: [
-              {
-                type: "object",
-                resource: { href: defaultModelUrl },
-                anchor: "bottom",
-              },
-            ],
-          }
+        ? modelSymbol(defaultModelUrl)
         : {
             type: "point-3d",
             symbolLayers: [
@@ -167,7 +175,7 @@ export const createBackendLayer = (
             symbolLayers: [
               {
                 type: "icon",
-                resource: { href: getMapPinIcon(layer.metadata?.color as string || "#ef4444") },
+                resource: { href: getMapPinIcon(resolveLayerColor(layer)) },
                 size: 28,
               },
             ],
@@ -203,23 +211,38 @@ export const createBackendLayer = (
     }
   }
 
+  const isPointLayer = layer.type.toLowerCase() === "point" || layer.type === "Point";
+  const hasDefaultModel = Boolean(layer.modelUrl);
+  let hasFeatureModels = false;
+  if (featureCollection?.features) {
+    hasFeatureModels = featureCollection.features.some((f: any) => f.properties?.modelUrl);
+  }
+  const isPointWithModel =
+    isPointLayer && (hasDefaultModel || hasFeatureModels || rendererHasObjectSymbol(resolvedRenderer));
+
   const geoLayer = new GeoJSONLayer({
     url: geoJsonUrl,
     title: layer.name,
     renderer: resolvedRenderer,
-    visible: layer.visible,
+    visible: layer.visible && (show3DModels || !isPointWithModel),
     elevationInfo: {
       mode: "relative-to-ground",
       featureExpressionInfo: { expression: "$feature.elevation" },
       unit: "meters",
     },
     popupTemplate: layer.popupTemplate,
+    minScale: isPointWithModel ? MODEL_DETAIL_SCALE : undefined,
+    outFields: ["*"],
   });
   layers.push(geoLayer);
 
-  const hasVertexCollection = Boolean(
+  let hasVertexCollection = Boolean(
     layer.vertexFeatureCollection?.features?.length || layer.vertexFeatureCollectionUrl,
   );
+
+  if (isPointWithModel) {
+    hasVertexCollection = true;
+  }
 
   if (hasVertexCollection) {
     let vertexUrl = resolveUrl(layer.vertexFeatureCollectionUrl);
@@ -231,6 +254,8 @@ export const createBackendLayer = (
         }),
       );
       blobUrls.push(vertexUrl);
+    } else if (isPointWithModel) {
+      vertexUrl = geoJsonUrl;
     }
 
     const resolvedIconUrl = showPositioningIcons ? resolveUrl(layer.iconUrl) : undefined;
@@ -255,8 +280,9 @@ export const createBackendLayer = (
         const uniqueValueInfos: any[] = [];
         const uniqueColors = new Set<string>();
 
-        if (layer.vertexFeatureCollection?.features) {
-          layer.vertexFeatureCollection.features.forEach((f: any) => {
+        const featuresToInspect = layer.vertexFeatureCollection?.features || layer.featureCollection?.features;
+        if (featuresToInspect) {
+          featuresToInspect.forEach((f: any) => {
             if (f.properties?.color) {
               uniqueColors.add(f.properties.color);
             }
@@ -279,7 +305,7 @@ export const createBackendLayer = (
           });
         });
 
-        const defaultColor = layer.metadata?.color || "#ef4444";
+        const defaultColor = resolveLayerColor(layer);
         const defaultSymbol = {
           type: "point-3d",
           symbolLayers: [
@@ -308,7 +334,7 @@ export const createBackendLayer = (
           symbolLayers: [
             {
               type: "icon",
-              resource: { href: getMapPinIcon(layer.metadata?.color || "#ef4444") },
+              resource: { href: getMapPinIcon(resolveLayerColor(layer)) },
               size: 28,
             },
           ],
@@ -325,6 +351,8 @@ export const createBackendLayer = (
         mode: "relative-to-ground",
       },
       popupTemplate: layer.popupTemplate,
+      maxScale: MODEL_DETAIL_SCALE,
+      outFields: ["*"],
     });
     layers.push(vertexLayer);
   }

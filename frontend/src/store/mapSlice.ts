@@ -1,7 +1,7 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 
-const DEFAULT_BASEMAP_STYLE = "arcgis/topographic";
-const GROUND_OPACITY_DEFAULT = 0.55;
+const DEFAULT_BASEMAP_STYLE = "arcgis/streets";
+const GROUND_OPACITY_DEFAULT = 1.0;
 import type { BackendLayer, BackendModel3D, BackendSpatialEntity } from "../types/backend";
 import type { MapViewState, TerrainMode } from "../types/map";
 import type { BasemapStyle } from "../utils/basemapStyles";
@@ -54,7 +54,7 @@ type MapState = {
   selectedLayerIds: string[];
   layerStatus: LayerStatus;
   layerError: string | null;
-  goToTarget: { longitude: number; latitude: number; zoom?: number } | null;
+  goToTarget: { longitude: number; latitude: number; zoom?: number; scale?: number } | null;
   showPositioningIcons: boolean;
   show3DModels: boolean;
   layerPanelOpen: boolean;
@@ -72,6 +72,8 @@ type MapState = {
   editorSliceEnabled: boolean;
   editorSliceExcludeDoors: boolean;
   editorSliceDoorsRed: boolean;
+  editorSliceHeading: number;
+  editorSliceTilt: number;
   editorUpdateRequest: {
     nonce: number;
     values: Partial<EditorFeatureState>;
@@ -89,10 +91,6 @@ type MapState = {
     heading: number;
     scale?: number;
   } | null;
-  editorSliceTiltX: number;
-  editorSliceTiltY: number;
-  editorSliceTiltZ: number;
-  editorSliceViewerOpen: boolean;
   inspectedEntity: BackendSpatialEntity | null;
 };
 
@@ -289,6 +287,8 @@ const initialState: MapState = {
   editorSliceEnabled: false,
   editorSliceExcludeDoors: true,
   editorSliceDoorsRed: false,
+  editorSliceHeading: 0,
+  editorSliceTilt: 90,
   editorUpdateRequest: null,
   editorDeleteRequest: 0,
   sceneEditMode: false,
@@ -297,10 +297,6 @@ const initialState: MapState = {
   placementSceneId: null,
   placementFileUrl: null,
   placementPreview: null,
-  editorSliceTiltX: 0,
-  editorSliceTiltY: 0,
-  editorSliceTiltZ: 0,
-  editorSliceViewerOpen: false,
   inspectedEntity: null,
 };
 
@@ -348,12 +344,12 @@ const mapSlice = createSlice({
         state.goToTarget = {
           longitude: center.lng,
           latitude: center.lat,
-          zoom: 18,
+          scale: 50,
         };
       }
     },
     goToPosition(state, action) {
-      state.goToTarget = action.payload as { longitude: number; latitude: number; zoom?: number };
+      state.goToTarget = action.payload as { longitude: number; latitude: number; zoom?: number; scale?: number };
     },
     clearGoToTarget(state) {
       state.goToTarget = null;
@@ -422,6 +418,12 @@ const mapSlice = createSlice({
     setEditorSliceDoorsRed(state, action) {
       state.editorSliceDoorsRed = action.payload as boolean;
     },
+    setEditorSliceHeading(state, action) {
+      state.editorSliceHeading = action.payload as number;
+    },
+    setEditorSliceTilt(state, action) {
+      state.editorSliceTilt = action.payload as number;
+    },
     requestEditorFeatureUpdate(state, action) {
       state.editorUpdateRequest = {
         nonce: (state.editorUpdateRequest?.nonce ?? 0) + 1,
@@ -462,18 +464,6 @@ const mapSlice = createSlice({
       state.placementSceneId = null;
       state.placementFileUrl = null;
       state.placementPreview = null;
-    },
-    setEditorSliceTiltX(state, action) {
-      state.editorSliceTiltX = action.payload as number;
-    },
-    setEditorSliceTiltY(state, action) {
-      state.editorSliceTiltY = action.payload as number;
-    },
-    setEditorSliceTiltZ(state, action) {
-      state.editorSliceTiltZ = action.payload as number;
-    },
-    setEditorSliceViewerOpen(state, action) {
-      state.editorSliceViewerOpen = action.payload as boolean;
     },
     setInspectedEntity(state, action) {
       state.inspectedEntity = action.payload as BackendSpatialEntity | null;
@@ -568,6 +558,8 @@ export const {
   setEditorSliceEnabled,
   setEditorSliceExcludeDoors,
   setEditorSliceDoorsRed,
+  setEditorSliceHeading,
+  setEditorSliceTilt,
   requestEditorFeatureUpdate,
   requestEditorFeatureDelete,
   setSceneEditMode,
@@ -576,10 +568,6 @@ export const {
   updatePlacementPreview,
   confirmPlacement,
   cancelPlacement,
-  setEditorSliceTiltX,
-  setEditorSliceTiltY,
-  setEditorSliceTiltZ,
-  setEditorSliceViewerOpen,
   setInspectedEntity,
 } = mapSlice.actions;
 
@@ -613,6 +601,8 @@ export const selectEditorSceneLayerType = (s: RootState) => s.map.editorSceneLay
 export const selectEditorSliceEnabled = (s: RootState) => s.map.editorSliceEnabled;
 export const selectEditorSliceExcludeDoors = (s: RootState) => s.map.editorSliceExcludeDoors;
 export const selectEditorSliceDoorsRed = (s: RootState) => s.map.editorSliceDoorsRed;
+export const selectEditorSliceHeading = (s: RootState) => s.map.editorSliceHeading;
+export const selectEditorSliceTilt = (s: RootState) => s.map.editorSliceTilt;
 export const selectEditorUpdateRequest = (s: RootState) => s.map.editorUpdateRequest;
 export const selectEditorDeleteRequest = (s: RootState) => s.map.editorDeleteRequest;
 export const selectSceneEditMode = (s: RootState) => s.map.sceneEditMode;
@@ -621,10 +611,6 @@ export const selectPlacementMode = (s: RootState) => s.map.placementMode;
 export const selectPlacementSceneId = (s: RootState) => s.map.placementSceneId;
 export const selectPlacementFileUrl = (s: RootState) => s.map.placementFileUrl;
 export const selectPlacementPreview = (s: RootState) => s.map.placementPreview;
-export const selectEditorSliceTiltX = (s: RootState) => s.map.editorSliceTiltX;
-export const selectEditorSliceTiltY = (s: RootState) => s.map.editorSliceTiltY;
-export const selectEditorSliceTiltZ = (s: RootState) => s.map.editorSliceTiltZ;
-export const selectEditorSliceViewerOpen = (s: RootState) => s.map.editorSliceViewerOpen;
 export const selectInspectedEntity = (s: RootState) => s.map.inspectedEntity;
 
 export const selectEffectiveTerrain = (s: RootState): TerrainMode =>

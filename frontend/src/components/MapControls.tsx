@@ -1,7 +1,7 @@
 import { useState } from "react";
 const GROUND_OPACITY_MAX = 1;
 const GROUND_OPACITY_MIN = 0;
-const DEFAULT_BASEMAP_STYLE = "arcgis/topographic";
+const DEFAULT_BASEMAP_STYLE = "arcgis/streets";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import {
   selectBasemapStyleId,

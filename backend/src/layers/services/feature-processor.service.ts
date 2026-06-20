@@ -30,7 +30,7 @@ export class FeatureProcessorService {
       const scale = Number(properties.scale ?? layerConfig.scale ?? 1);
       const opacity = Number(properties.opacity ?? 1);
       const color = properties.color ?? null;
-      const assetUrl = properties.assetUrl ?? layerConfig.modelUrl ?? null;
+      const assetUrl = properties.assetUrl ?? properties.modelUrl ?? layerConfig.modelUrl ?? null;
       const iconUrl = properties.iconUrl ?? layerConfig.iconUrl ?? null;
 
       const processedProperties = {

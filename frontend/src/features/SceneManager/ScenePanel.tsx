@@ -352,7 +352,7 @@ export const ScenePanel: React.FC = () => {
         goToPosition({
           longitude: scene.position.x,
           latitude: scene.position.y,
-          zoom: 18,
+          scale: 50,
         })
       );
     } else if ((scene.lodLevel ?? 0) > 0 && scene.parent) {
@@ -364,7 +364,7 @@ export const ScenePanel: React.FC = () => {
           goToPosition({
             longitude: coords.longitude,
             latitude: coords.latitude,
-            zoom: 20,
+            scale: 50,
           })
         );
       }

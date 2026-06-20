@@ -6,7 +6,6 @@ import MapControls from "./components/MapControls";
 import MapScene from "./components/MapScene";
 import { LayerPanel } from "./features/LayerManager/LayerPanel";
 import ThreeDEditorPanel from "./features/ThreeDEditor/ThreeDEditorPanel";
-import { SliceExternalViewer } from "./features/ThreeDEditor/SliceExternalViewer";
 import { EntityInspectorPanel } from "./features/EntityInspector/EntityInspectorPanel";
 
 function App() {
@@ -22,7 +21,6 @@ function App() {
       <LayerPanel />
       <MapControls />
       <ThreeDEditorPanel />
-      <SliceExternalViewer />
       <EntityInspectorPanel />
     </div>
   );

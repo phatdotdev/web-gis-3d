@@ -8,7 +8,7 @@ import { CreateLayerDto } from './dto/create-layer.dto';
 import { UpdateLayerDto } from './dto/update-layer.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Layer } from './entities/layer.entity';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { SpatialEntity } from '../spatial-entities/entities/spatial-entity.entity';
 import { GeoJsonDownloaderService } from './services/geojson-downloader.service';
 import { GeoJsonPipelineService, PipelineResult } from './services/geojson-pipeline.service';
@@ -263,6 +263,8 @@ export class LayersService {
     return {
       ...(entity.metadata ?? {}),
       id: entity.id,
+      entityId: entity.id,
+      backendEntityId: entity.id,
       name: entity.name,
       type: entity.type,
       renderType: entity.renderType,
@@ -318,6 +320,7 @@ export class LayersService {
 
       await this.layerRepository.save(layer);
       await this.syncSpatialEntities(layer, pipelineResult.featureCollection.features);
+      await this.buildRenderCacheFromEntities(layer);
 
       return { status: 'latest' };
     } catch (err: any) {
@@ -405,6 +408,7 @@ export class LayersService {
 
       const updatedLayer = await this.saveLayerSafely(savedLayer);
       await this.syncSpatialEntities(updatedLayer, pipelineResult.featureCollection.features);
+      await this.buildRenderCacheFromEntities(updatedLayer);
 
       const reloaded = await this.reloadLayerWithCount(updatedLayer.id);
       return this.toResponseDto(reloaded, 'latest');
@@ -415,6 +419,18 @@ export class LayersService {
   }
 
   async findAll(): Promise<LayerResponseDto[]> {
+    const nullCacheLayers = await this.layerRepository.find({
+      where: { renderCache: IsNull() },
+    });
+
+    for (const layer of nullCacheLayers) {
+      if (layer.dataUrl?.trim()) {
+        await this.tryProcessRemoteData(layer);
+      } else {
+        await this.buildRenderCacheFromEntities(layer);
+      }
+    }
+
     const rows = await this.layerRepository.query(`
       SELECT
         l.id,
@@ -559,6 +575,7 @@ export class LayersService {
 
           const updatedLayer = await this.saveLayerSafely(savedLayer);
           await this.syncSpatialEntities(updatedLayer, pipelineResult.featureCollection.features);
+          await this.buildRenderCacheFromEntities(updatedLayer);
         } catch (err: any) {
           this.logger.error(`Failed to sync render cache on update for layer ${savedLayer.id}: ${err.message}`);
         }
