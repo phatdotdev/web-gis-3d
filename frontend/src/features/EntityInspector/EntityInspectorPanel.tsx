@@ -12,6 +12,8 @@ import {
   ImagePlus,
   Loader2,
   Image,
+  Boxes,
+  Layers3,
 } from "lucide-react";
 
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
@@ -20,8 +22,10 @@ import {
   setInspectedEntity,
   goToEntity,
   updateEntity,
+  selectSceneInteraction,
+  setSceneLodLevel,
 } from "../../store/mapSlice";
-import type { BackendSpatialEntity } from "../../types/backend";
+import type { BackendSpatialEntity, SceneLodLevel } from "../../types/backend";
 import { fmtCoord, getEntityCenter } from "../../utils/geometry";
 import {
   backendHost,
@@ -34,6 +38,17 @@ type TabId = "info" | "edit";
 
 const labelClasses = "text-[11px] font-semibold text-calcite-text-3";
 const valueClasses = "text-[12px] font-semibold text-calcite-text-1 font-mono truncate";
+
+const sceneLodOptions: Array<{
+  level: SceneLodLevel;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+}> = [
+  { level: 0, label: "LOD0", description: "Model gốc", icon: Box },
+  { level: 1, label: "LOD1", description: "Thành phần", icon: Boxes },
+  { level: 2, label: "LOD2", description: "Chi tiết", icon: Layers3 },
+];
 
 const resolveImageUrl = (url: string) => {
   if (!url) return "";
@@ -246,6 +261,7 @@ const ImageGallery: React.FC<{
 export const EntityInspectorPanel: React.FC = () => {
   const dispatch = useAppDispatch();
   const entity = useAppSelector(selectInspectedEntity);
+  const sceneInteraction = useAppSelector(selectSceneInteraction);
 
   const [activeTab, setActiveTab] = useState<TabId>("info");
   const [editMetadata, setEditMetadata] = useState<Record<string, unknown>>({});
@@ -302,10 +318,38 @@ export const EntityInspectorPanel: React.FC = () => {
     [dispatch],
   );
 
+  const handleSceneLodChange = useCallback(
+    (sceneId: string, lodLevel: SceneLodLevel) => {
+      if (!entity) return;
+      dispatch(setSceneLodLevel({ sceneId, lodLevel }));
+      dispatch(
+        setInspectedEntity({
+          ...entity,
+          metadata: {
+            ...(entity.metadata ?? {}),
+            activeLodLevel: lodLevel,
+            rootSceneId: sceneId,
+          },
+        }),
+      );
+    },
+    [entity, dispatch],
+  );
+
   if (!entity) return null;
 
   const center = getEntityCenter(entity.geometry);
   const images = entity.images ?? [];
+  const isSceneNode = entity.type === "scene_node";
+  const sceneRootId = String(entity.metadata?.rootSceneId ?? entity.sceneId ?? entity.id);
+  const sceneLodLevel = Number(entity.metadata?.lodLevel ?? 0);
+  const sceneActiveLodLevel = sceneInteraction.activeLodLevelsBySceneId[sceneRootId] ?? Number(entity.metadata?.activeLodLevel ?? sceneLodLevel);
+  const sceneBreadcrumb = String(entity.metadata?.breadcrumb ?? entity.name ?? "");
+  const sceneChildCount = Number(entity.metadata?.childCount ?? entity.scene?.children?.length ?? 0);
+  const sceneParentName =
+    typeof entity.metadata?.parentSceneName === "string"
+      ? entity.metadata.parentSceneName
+      : entity.scene?.parent?.name ?? null;
 
   return (
     <>
@@ -351,11 +395,10 @@ export const EntityInspectorPanel: React.FC = () => {
           <button
             onClick={() => setShowImagesOnly(!showImagesOnly)}
             disabled={entity.type === "scene_node"}
-            className={`flex flex-col items-center justify-center gap-1 py-2 px-1 text-[11px] font-semibold border rounded-sm transition-all cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
-              showImagesOnly
+            className={`flex flex-col items-center justify-center gap-1 py-2 px-1 text-[11px] font-semibold border rounded-sm transition-all cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${showImagesOnly
                 ? "bg-calcite-bg-3 text-calcite-brand border-calcite-brand"
                 : "bg-calcite-bg-2 text-calcite-text-2 border-calcite-border-2 hover:text-calcite-brand hover:border-calcite-brand hover:bg-calcite-bg-3"
-            }`}
+              }`}
             title="Xem ảnh đính kèm"
           >
             <Image size={13} />
@@ -370,6 +413,44 @@ export const EntityInspectorPanel: React.FC = () => {
             <span>Chi tiết</span>
           </button>
         </div>
+
+        {isSceneNode && (
+          <div className="p-2.5 bg-calcite-bg-2 border-b border-calcite-border-2 shrink-0">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold text-calcite-text-3 uppercase tracking-wider">
+                Level of detail
+              </span>
+              <span className="text-[10px] font-bold text-calcite-brand bg-calcite-bg-3 px-1.5 py-0.5 rounded-sm">
+                LOD{sceneActiveLodLevel}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {sceneLodOptions.map((option) => {
+                const Icon = option.icon;
+                const active = sceneActiveLodLevel === option.level;
+                return (
+                  <button
+                    key={option.level}
+                    type="button"
+                    onClick={() => handleSceneLodChange(sceneRootId, option.level)}
+                    className={`h-[50px] inline-flex flex-col items-center justify-center gap-0.5 rounded-sm border px-1 text-[10px] font-semibold cursor-pointer transition-all ${
+                      active
+                        ? "bg-calcite-bg-3 text-calcite-brand border-calcite-brand"
+                        : "bg-calcite-bg-1 text-calcite-text-2 border-calcite-border-2 hover:text-calcite-brand hover:border-calcite-brand"
+                    }`}
+                    title={`${option.label} - ${option.description}`}
+                  >
+                    <Icon size={13} />
+                    <span>{option.label}</span>
+                    <span className="text-[8.5px] font-medium opacity-80 truncate max-w-full">
+                      {option.description}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Mini Images Content Area */}
         {showImagesOnly && entity.type !== "scene_node" && (
@@ -426,22 +507,20 @@ export const EntityInspectorPanel: React.FC = () => {
             {/* Modal Tabs */}
             <div className="flex border-b border-calcite-border-2 bg-calcite-bg-1 px-2 pt-1 shrink-0 gap-1">
               <button
-                className={`flex-1 py-2 px-3 text-[12px] font-semibold rounded-t-sm flex items-center justify-center gap-1.5 cursor-pointer transition-all border-b-2 ${
-                  activeTab === "info"
+                className={`flex-1 py-2 px-3 text-[12px] font-semibold rounded-t-sm flex items-center justify-center gap-1.5 cursor-pointer transition-all border-b-2 ${activeTab === "info"
                     ? "bg-calcite-bg-2 text-calcite-brand border-calcite-brand shadow-[0_-1px_3px_rgba(0,0,0,0.03)]"
                     : "text-calcite-text-3 border-transparent hover:text-calcite-text-1 hover:bg-calcite-bg-3"
-                }`}
+                  }`}
                 onClick={() => setActiveTab("info")}
               >
                 <Info size={13} />
                 Thông tin
               </button>
               <button
-                className={`flex-1 py-2 px-3 text-[12px] font-semibold rounded-t-sm flex items-center justify-center gap-1.5 cursor-pointer transition-all border-b-2 ${
-                  activeTab === "edit"
+                className={`flex-1 py-2 px-3 text-[12px] font-semibold rounded-t-sm flex items-center justify-center gap-1.5 cursor-pointer transition-all border-b-2 ${activeTab === "edit"
                     ? "bg-calcite-bg-2 text-calcite-brand border-calcite-brand shadow-[0_-1px_3px_rgba(0,0,0,0.03)]"
                     : "text-calcite-text-3 border-transparent hover:text-calcite-text-1 hover:bg-calcite-bg-3"
-                }`}
+                  }`}
                 onClick={() => setActiveTab("edit")}
               >
                 <Edit2 size={13} />
@@ -453,6 +532,52 @@ export const EntityInspectorPanel: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5 [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-thumb]:bg-[rgba(0,0,0,0.15)] [&::-webkit-scrollbar-thumb]:rounded-sm">
               {activeTab === "info" && (
                 <>
+                  {isSceneNode && (
+                    <div className="bg-calcite-bg-3 border border-calcite-border-2 rounded-sm p-3 flex flex-col gap-2">
+                      <span className="text-[10px] font-bold text-calcite-brand uppercase tracking-wider flex items-center gap-1">
+                        <Box size={11} /> Scene LOD
+                      </span>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
+                        <div className="flex flex-col min-w-0">
+                          <span className={labelClasses}>Dang chon</span>
+                          <span className="font-mono font-semibold text-calcite-text-1">
+                            LOD{sceneActiveLodLevel}
+                          </span>
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className={labelClasses}>Node LOD</span>
+                          <span className="font-mono font-semibold text-calcite-text-1">
+                            LOD{sceneLodLevel}
+                          </span>
+                        </div>
+                        <div className="flex flex-col min-w-0 col-span-2">
+                          <span className={labelClasses}>Breadcrumb</span>
+                          <span className="text-[12px] font-semibold text-calcite-text-1 truncate">
+                            {sceneBreadcrumb}
+                          </span>
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className={labelClasses}>Scene cha</span>
+                          <span className="text-[12px] font-semibold text-calcite-text-1 truncate">
+                            {sceneParentName || "Root"}
+                          </span>
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className={labelClasses}>Node con</span>
+                          <span className="font-mono font-semibold text-calcite-text-1">
+                            {sceneChildCount}
+                          </span>
+                        </div>
+                        <div className="flex flex-col min-w-0 col-span-2">
+                          <span className={labelClasses}>Model URL</span>
+                          <span className="text-[11px] font-mono text-calcite-text-1 truncate">
+                            {entity.modelUrl || "-"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Basic Info Grid */}
                   <div className="grid grid-cols-2 gap-x-3 gap-y-2 bg-calcite-bg-3 border border-calcite-border-2 rounded-sm p-3">
                     <div className="flex flex-col min-w-0">

@@ -17,6 +17,7 @@ import {
   MapPin,
   XCircle,
   MousePointerClick,
+  Box,
 } from "lucide-react";
 
 import type { BackendScene3D, BackendSpatialEntity } from "../../types/backend";
@@ -56,6 +57,8 @@ type FormState = {
   sortOrder: number;
   visible: boolean;
 };
+
+type ScenePanelMode = "list" | "create" | "edit";
 
 const emptyForm: FormState = {
   name: "",
@@ -161,6 +164,7 @@ export const ScenePanel: React.FC = () => {
   const [scenes, setScenes] = useState<BackendScene3D[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingScene, setEditingScene] = useState<BackendScene3D | null>(null);
+  const [panelMode, setPanelMode] = useState<ScenePanelMode>("list");
   const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
 
@@ -210,13 +214,24 @@ export const ScenePanel: React.FC = () => {
     }
   }, [activeEditingNode]);
 
-  const startCreate = () => {
+  const closeSceneForm = () => {
+    setPanelMode("list");
     setEditingScene(null);
     setForm(emptyForm);
+    setError(null);
+  };
+
+  const startCreate = () => {
+    setPanelMode("create");
+    setEditingScene(null);
+    setForm(emptyForm);
+    setError(null);
   };
 
   const startEdit = (scene: BackendScene3D) => {
+    setPanelMode("edit");
     setEditingScene(scene);
+    setError(null);
     setForm({
       name: scene.name,
       description: scene.description ?? "",
@@ -247,7 +262,7 @@ export const ScenePanel: React.FC = () => {
       } else {
         await createScene(payload);
       }
-      startCreate();
+      closeSceneForm();
       await loadScenes();
       emitSceneReload();
     } catch (err) {
@@ -434,6 +449,7 @@ export const ScenePanel: React.FC = () => {
     const hasChildren = node.children.length > 0;
     const isExpanded = expandedIds.has(node.id);
     const isEditing = editingNodeId === node.id;
+    const NodeIcon = (node.lodLevel ?? 0) === 0 ? Building2 : Box;
 
     return (
       <div key={node.id} className="flex flex-col">
@@ -456,9 +472,10 @@ export const ScenePanel: React.FC = () => {
             </button>
             <span
               onClick={() => void handleSelectNode(node)}
-              className="font-medium cursor-pointer truncate flex-1 hover:underline"
+              className="font-medium cursor-pointer truncate flex-1 hover:underline inline-flex items-center gap-1.5"
             >
-              {node.name}
+              <NodeIcon size={12} className={(node.lodLevel ?? 0) === 0 ? "text-[#2563eb]" : "text-[#64748b]"} />
+              <span className="truncate">{node.name}</span>
               <span className="text-[9px] ml-1.5 text-[#94a3b8]">
                 (LOD {node.lodLevel})
               </span>
@@ -485,6 +502,7 @@ export const ScenePanel: React.FC = () => {
             {node.lodLevel === 0 && (
               <button
                 onClick={() => {
+                  setPanelMode("edit");
                   dispatch(startPlacement({ sceneId: node.id, fileUrl: node.fileUrl }));
                 }}
                 className={`w-5 h-5 inline-flex items-center justify-center rounded text-[#64748b] hover:text-[#eab308] hover:bg-[#fefce8] cursor-pointer ${
@@ -525,11 +543,28 @@ export const ScenePanel: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-4">
+      {panelMode !== "list" && (
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={closeSceneForm}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#64748b] hover:text-[#1e293b] border border-[#e2e8f0] bg-white cursor-pointer py-1.5 px-2.5 rounded-lg"
+          >
+            <ChevronRight size={13} className="rotate-180" />
+            Quay lại danh sách
+          </button>
+          <span className="text-[11px] font-bold text-[#2563eb] bg-[#eff6ff] px-2 py-1 rounded">
+            {panelMode === "create" ? "Thêm scene" : "Sửa scene"}
+          </span>
+        </div>
+      )}
+
       {/* SECTION 1: PIPELINE UPLOAD & BÓC TÁCH */}
-      <form
-        onSubmit={handleStartUploadAndPlace}
-        className="border border-[#e2e8f0] bg-white rounded-lg p-3.5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.02)]"
-      >
+      {panelMode === "create" && (
+        <form
+          onSubmit={handleStartUploadAndPlace}
+          className="border border-[#e2e8f0] bg-white rounded-lg p-3.5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.02)]"
+        >
         <div className="flex items-center gap-2 text-[#1e293b] font-bold text-sm">
           <Upload size={16} className="text-[#2563eb]" />
           Bóc tách mô hình 3D tổng (glTF)
@@ -575,10 +610,12 @@ export const ScenePanel: React.FC = () => {
           <MapPin size={13} />
           Chọn vị trí trên bản đồ
         </button>
-      </form>
+        </form>
+      )}
 
       {/* SECTION 2: MAP EDITING MODE CONTROLS */}
-      <div className="border border-[#e2e8f0] bg-white rounded-lg p-3.5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+      {panelMode !== "list" && (
+        <div className="border border-[#e2e8f0] bg-white rounded-lg p-3.5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-[#1e293b] font-bold text-sm">
             <Move size={16} className="text-[#eab308]" />
@@ -605,10 +642,11 @@ export const ScenePanel: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       {/* SECTION PLACEMENT MODE */}
-      {placementMode && (
+      {panelMode !== "list" && placementMode && (
         <div className="border border-[#eab308] bg-[#fefce8] rounded-lg p-3.5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-[#ca8a04] font-bold text-sm">
@@ -680,7 +718,7 @@ export const ScenePanel: React.FC = () => {
       )}
 
       {/* SECTION 3: EDITING NODE DETAILS / TRANSFORM CONTROL */}
-      {activeEditingNode && (
+      {panelMode !== "list" && activeEditingNode && (
         <div className="border border-[#3b82f6] bg-[#eff6ff] rounded-lg p-3.5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
           <div className="flex justify-between items-center">
             <div className="text-[13px] font-bold text-[#1d4ed8] flex items-center gap-1.5">
@@ -807,10 +845,11 @@ export const ScenePanel: React.FC = () => {
       )}
 
       {/* SECTION 4: BASIC SCENE CRUD FORM */}
-      <form
-        onSubmit={submit}
-        className="border border-[#e2e8f0] bg-white rounded-lg p-3.5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.02)]"
-      >
+      {panelMode !== "list" && (
+        <form
+          onSubmit={submit}
+          className="border border-[#e2e8f0] bg-white rounded-lg p-3.5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.02)]"
+        >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-[#1e293b] font-bold text-sm">
             <Building2 size={16} className="text-[#2563eb]" />
@@ -905,20 +944,42 @@ export const ScenePanel: React.FC = () => {
           {editingScene && (
             <button
               type="button"
-              onClick={startCreate}
+              onClick={closeSceneForm}
               className="inline-flex items-center justify-center py-2 px-3.5 text-[12.5px] font-semibold border border-[#e2e8f0] rounded-lg cursor-pointer bg-white text-[#475569] hover:bg-[#f8fafc]"
             >
               Hủy
             </button>
           )}
         </div>
-      </form>
+        </form>
+      )}
 
       {/* SECTION 5: CÂY SCENE 3D (TREE VIEW) */}
       <div className="border border-[#e2e8f0] bg-white rounded-lg p-3.5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-        <div className="text-sm font-bold text-[#1e293b] flex items-center gap-2">
-          <Building2 size={16} className="text-[#2563eb]" />
-          Cấu trúc cây Scene 3D & LOD
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-bold text-[#1e293b] flex items-center gap-2">
+            <Building2 size={16} className="text-[#2563eb]" />
+            Cấu trúc Scene 3D & LOD
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => void loadScenes()}
+              className="w-7 h-7 inline-flex items-center justify-center rounded-lg border border-[#e2e8f0] text-[#64748b] hover:bg-[#f8fafc] cursor-pointer"
+              title="Làm mới"
+            >
+              <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+            </button>
+            <button
+              type="button"
+              onClick={startCreate}
+              className="h-7 inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-2.5 text-[11.5px] font-bold text-[#2563eb] hover:bg-[#dbeafe] cursor-pointer"
+              title="Thêm scene"
+            >
+              <Plus size={13} />
+              Thêm
+            </button>
+          </div>
         </div>
 
         {loading ? (

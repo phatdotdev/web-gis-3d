@@ -67,6 +67,26 @@ export type BackendScene3D = {
   updatedAt?: string;
 };
 
+export type SceneLodLevel = 0 | 1 | 2;
+
+export type SceneNode = {
+  id: string;
+  sceneId: string;
+  parentId?: string | null;
+  name: string;
+  lodLevel: SceneLodLevel;
+  modelUrl?: string | null;
+  transform?: {
+    position: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number };
+    scale: { x: number; y: number; z: number };
+  };
+  metadata?: Record<string, unknown> | null;
+  source: BackendScene3D;
+  parent?: BackendScene3D | { id: string; name?: string | null } | null;
+  childCount?: number;
+};
+
 
 export type BackendSpatialEntity = {
   id: string;

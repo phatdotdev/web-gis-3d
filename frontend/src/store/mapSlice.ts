@@ -25,6 +25,15 @@ import type { RootState } from "./store";
 type LayerStatus = "loading" | "ready" | "error";
 export type EditorTool = "select" | "place-model" | "draw-extrude" | "draw-ground";
 export type EditorFeatureKind = "model" | "extrude" | "ground";
+export type SceneLodLevel = 0 | 1 | 2;
+
+export type SceneInteractionState = {
+  activeSceneId: string | null;
+  activeLodLevel: SceneLodLevel;
+  activeLodLevelsBySceneId: Record<string, SceneLodLevel>;
+  selectedSceneNodeId: string | null;
+  hoveredSceneNodeId?: string | null;
+};
 
 export type EditorFeatureState = {
   id: string;
@@ -81,6 +90,7 @@ type MapState = {
   editorDeleteRequest: number;
   sceneEditMode: boolean;
   sceneEditingNodeId: string | null;
+  sceneInteraction: SceneInteractionState;
   placementMode: boolean;
   placementSceneId: string | null;
   placementFileUrl: string | null;
@@ -293,6 +303,13 @@ const initialState: MapState = {
   editorDeleteRequest: 0,
   sceneEditMode: false,
   sceneEditingNodeId: null,
+  sceneInteraction: {
+    activeSceneId: null,
+    activeLodLevel: 0,
+    activeLodLevelsBySceneId: {},
+    selectedSceneNodeId: null,
+    hoveredSceneNodeId: null,
+  },
   placementMode: false,
   placementSceneId: null,
   placementFileUrl: null,
@@ -439,6 +456,29 @@ const mapSlice = createSlice({
     setSceneEditingNodeId(state, action) {
       state.sceneEditingNodeId = action.payload as string | null;
     },
+    setActiveSceneId(state, action) {
+      state.sceneInteraction.activeSceneId = action.payload as string | null;
+    },
+    setActiveLodLevel(state, action) {
+      const lodLevel = action.payload as SceneLodLevel;
+      state.sceneInteraction.activeLodLevel = lodLevel;
+      state.sceneInteraction.selectedSceneNodeId = null;
+    },
+    setSceneLodLevel(state, action) {
+      const payload = action.payload as {
+        sceneId: string;
+        lodLevel: SceneLodLevel;
+      };
+      state.sceneInteraction.activeLodLevelsBySceneId[payload.sceneId] = payload.lodLevel;
+      state.sceneInteraction.activeSceneId = payload.sceneId;
+      state.sceneInteraction.selectedSceneNodeId = null;
+    },
+    setSelectedSceneNodeId(state, action) {
+      state.sceneInteraction.selectedSceneNodeId = action.payload as string | null;
+    },
+    setHoveredSceneNodeId(state, action) {
+      state.sceneInteraction.hoveredSceneNodeId = action.payload as string | null;
+    },
     startPlacement(state, action) {
       state.placementMode = true;
       if (typeof action.payload === "string") {
@@ -564,6 +604,11 @@ export const {
   requestEditorFeatureDelete,
   setSceneEditMode,
   setSceneEditingNodeId,
+  setActiveSceneId,
+  setActiveLodLevel,
+  setSceneLodLevel,
+  setSelectedSceneNodeId,
+  setHoveredSceneNodeId,
   startPlacement,
   updatePlacementPreview,
   confirmPlacement,
@@ -607,6 +652,15 @@ export const selectEditorUpdateRequest = (s: RootState) => s.map.editorUpdateReq
 export const selectEditorDeleteRequest = (s: RootState) => s.map.editorDeleteRequest;
 export const selectSceneEditMode = (s: RootState) => s.map.sceneEditMode;
 export const selectSceneEditingNodeId = (s: RootState) => s.map.sceneEditingNodeId;
+export const selectSceneInteraction = (s: RootState) => s.map.sceneInteraction;
+export const selectActiveSceneId = (s: RootState) => s.map.sceneInteraction.activeSceneId;
+export const selectActiveLodLevel = (s: RootState) => s.map.sceneInteraction.activeLodLevel;
+export const selectSceneLodLevelsBySceneId = (s: RootState) =>
+  s.map.sceneInteraction.activeLodLevelsBySceneId;
+export const selectSelectedSceneNodeId = (s: RootState) =>
+  s.map.sceneInteraction.selectedSceneNodeId;
+export const selectHoveredSceneNodeId = (s: RootState) =>
+  s.map.sceneInteraction.hoveredSceneNodeId;
 export const selectPlacementMode = (s: RootState) => s.map.placementMode;
 export const selectPlacementSceneId = (s: RootState) => s.map.placementSceneId;
 export const selectPlacementFileUrl = (s: RootState) => s.map.placementFileUrl;

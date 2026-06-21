@@ -13,6 +13,7 @@ import {
   Box,
   Compass,
   RefreshCw,
+  Building2,
 } from "lucide-react";
 
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
@@ -220,7 +221,7 @@ export const LayerPanel: React.FC = () => {
             )}
             onClick={() => setActiveTab("scenes")}
           >
-            <Compass size={13} />
+            <Building2 size={13} />
             Scenes
           </button>
         </div>

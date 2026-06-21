@@ -60,6 +60,7 @@ import {
   setInspectedEntity,
   setSceneEditingNodeId,
   selectPlacementFileUrl,
+  selectSceneLodLevelsBySceneId,
 } from "../store/mapSlice";
 import { createBackendLayer, getMapPinIcon, MODEL_DETAIL_SCALE } from "../layers/backendLayer";
 import { getEntityCenter } from "../utils/geometry";
@@ -331,6 +332,7 @@ const MapScene = () => {
   const sceneEditingNodeId = useAppSelector(selectSceneEditingNodeId);
   const inspectedEntity = useAppSelector(selectInspectedEntity);
   const placementFileUrl = useAppSelector(selectPlacementFileUrl);
+  const sceneLodLevelsBySceneId = useAppSelector(selectSceneLodLevelsBySceneId);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<Map | null>(null);
@@ -1329,8 +1331,13 @@ const MapScene = () => {
           }
         } else if (clickedSceneGraphic) {
           try {
-            const sceneId = clickedSceneGraphic.attributes.id;
-            const scene = await fetchSceneById(sceneId);
+            const attrs = clickedSceneGraphic.attributes ?? {};
+            const sceneId = attrs.id;
+            const scene = attrs.sceneNode ?? await fetchSceneById(sceneId);
+            const parentScene = attrs.parentScene ?? scene.parent ?? null;
+            const rootScene = attrs.rootScene ?? scene;
+            const rootSceneId = String(attrs.rootSceneId ?? rootScene.id ?? scene.id);
+            const activeLodLevel = sceneLodLevelsBySceneId[rootSceneId] ?? 0;
             const point = clickedSceneGraphic.geometry as Point;
             const virtualEntity: BackendSpatialEntity = {
               id: scene.id,
@@ -1351,7 +1358,14 @@ const MapScene = () => {
               modelUrl: scene.fileUrl || null,
               metadata: {
                 ...(scene.metadata ?? {}),
+                activeLodLevel,
+                breadcrumb: parentScene?.name ? `${parentScene.name} > ${scene.name}` : scene.name,
+                childCount: scene.children?.length ?? 0,
                 lodLevel: scene.lodLevel ?? 0,
+                parentSceneId: parentScene?.id ?? null,
+                parentSceneName: parentScene?.name ?? null,
+                rootSceneId,
+                rootSceneName: rootScene.name ?? scene.name,
                 description: scene.description ?? `Khối mô hình LOD ${scene.lodLevel ?? 0}`,
               },
               sceneId: scene.id,
@@ -1377,7 +1391,7 @@ const MapScene = () => {
     return () => {
       clickHandle.remove();
     };
-  }, [pickingCoordinateActive, sceneEditMode, editorOpen, editorTool, dispatch]);
+  }, [pickingCoordinateActive, sceneEditMode, editorOpen, editorTool, sceneLodLevelsBySceneId, dispatch]);
 
   // Tự động bao viền xanh (highlight) cho đối tượng 3D được chọn
   useEffect(() => {
