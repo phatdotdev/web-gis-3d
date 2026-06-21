@@ -158,8 +158,6 @@ export class ScenesService {
     }
     await this.sceneRepository.save(childScenes);
 
-    await this.syncChildSpatialEntities(parentScene.id);
-
     return await this.sceneRepository.findOne({
       where: { id: parentScene.id },
       relations: { children: true, entities: true }
@@ -282,7 +280,6 @@ export class ScenesService {
     }
 
     const saved = await this.sceneRepository.save(scene);
-    await this.syncChildSpatialEntities(scene.parent?.id ?? saved.id);
     return this.findOne(saved.id);
   }
 
@@ -334,8 +331,6 @@ export class ScenesService {
         await this.sceneRepository.save(childrenEntities);
       }
 
-      await this.syncChildSpatialEntities(savedParent.id);
-
       // 5. Return the full tree
       return this.findOne(savedParent.id);
     } catch (error) {
@@ -373,7 +368,6 @@ export class ScenesService {
     // Việc tính toán tọa độ thế giới (absolute) sẽ do frontend đảm nhiệm thông qua tính offset + rotation của parent.
     
     const saved = await this.sceneRepository.save(parent);
-    await this.syncChildSpatialEntities(saved.id);
     return this.findOne(saved.id);
   }
 

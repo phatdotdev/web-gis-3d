@@ -6,6 +6,8 @@ import type GraphicsLayer from "@arcgis/core/layers/GraphicsLayer";
 import type SceneView from "@arcgis/core/views/SceneView";
 import type { BackendScene3D } from "../types/backend";
 import { backendHost, fetchSceneChildren, fetchScenesByLod } from "../utils/backendApi";
+import { useAppSelector } from "../store/hooks";
+import { selectSceneEditMode, selectSceneEditingNodeId } from "../store/mapSlice";
 
 type RenderedSceneGraphics = {
   root: Graphic | null;
@@ -46,20 +48,6 @@ const createModelSymbol = (
   } as any;
 };
 
-const createInspectHitTargetSymbol = () =>
-  ({
-    type: "point-3d",
-    symbolLayers: [
-      {
-        type: "icon",
-        resource: { primitive: "circle" },
-        size: 28,
-        material: { color: [37, 99, 235, 0.01] },
-        outline: { color: [37, 99, 235, 0.01], size: 1 },
-      },
-    ],
-  }) as any;
-
 const projectChildOffset = (parent: BackendScene3D, child: BackendScene3D) => {
   const parentLng = parent.position?.x ?? 0;
   const parentLat = parent.position?.y ?? 0;
@@ -68,9 +56,9 @@ const projectChildOffset = (parent: BackendScene3D, child: BackendScene3D) => {
   const offset = child.position ?? { x: 0, y: 0, z: 0 };
 
   const headingRad = (parentHeading * Math.PI) / 180;
-  const baseDx = offset.x; // glTF X -> East
-  const baseDy = -offset.z; // glTF -Z -> North
-  const baseDz = offset.y; // glTF Y -> Up
+  const baseDx = offset.x;
+  const baseDy = -offset.z;
+  const baseDz = offset.y;
 
   const dx = baseDx * Math.cos(headingRad) + baseDy * Math.sin(headingRad);
   const dy = -baseDx * Math.sin(headingRad) + baseDy * Math.cos(headingRad);
@@ -95,6 +83,8 @@ export const useSceneLodLoader = (
   viewRef: React.RefObject<SceneView | null>,
   graphicsLayerRef: React.RefObject<GraphicsLayer | null>,
 ) => {
+  const sceneEditMode = useAppSelector(selectSceneEditMode);
+  const sceneEditingNodeId = useAppSelector(selectSceneEditingNodeId);
   const [rootScenes, setRootScenes] = useState<BackendScene3D[]>([]);
   const renderedGraphicsRef = useRef<Record<string, RenderedSceneGraphics>>({});
   const childrenCacheRef = useRef<Record<string, BackendScene3D[]>>({});
@@ -103,6 +93,7 @@ export const useSceneLodLoader = (
     let active = true;
 
     const load = () => {
+      childrenCacheRef.current = {};
       fetchScenesByLod(0)
         .then((data) => {
           if (active) setRootScenes(data);
@@ -110,17 +101,12 @@ export const useSceneLodLoader = (
         .catch((err) => console.error("Failed to load root scenes:", err));
     };
 
-    const reload = () => {
-      childrenCacheRef.current = {};
-      load();
-    };
-
     load();
-    window.addEventListener("scene3d:reload", reload);
+    window.addEventListener("scene3d:reload", load);
 
     return () => {
       active = false;
-      window.removeEventListener("scene3d:reload", reload);
+      window.removeEventListener("scene3d:reload", load);
     };
   }, []);
 
@@ -129,19 +115,69 @@ export const useSceneLodLoader = (
     const layer = graphicsLayerRef.current;
     if (!view || !layer || rootScenes.length === 0) return;
 
-    const threshold = 17;
-
     const removeChildren = (current: RenderedSceneGraphics) => {
       current.children.forEach((graphic) => layer.remove(graphic));
       current.children = [];
     };
 
-    const updateLOD = async () => {
-      const zoom = view.zoom;
-      if (zoom == null) return;
+    const shouldRenderChildren = (parent: BackendScene3D) =>
+      sceneEditMode ||
+      Boolean(sceneEditingNodeId && parent.children?.some((child) => child.id === sceneEditingNodeId));
 
-      const isNear = zoom >= threshold;
+    const renderChildren = async (parent: BackendScene3D, current: RenderedSceneGraphics) => {
+      if (current.children.length > 0) return;
 
+      let children = parent.children ?? childrenCacheRef.current[parent.id] ?? [];
+      if (children.length === 0) {
+        try {
+          children = await fetchSceneChildren(parent.id, 1);
+          childrenCacheRef.current[parent.id] = children;
+        } catch (err) {
+          console.error("Failed to load scene children:", err);
+        }
+      }
+
+      current.children = children
+        .filter((child) => child.visible !== false && Boolean(child.fileUrl))
+        .map((child) => {
+          const coords = projectChildOffset(parent, child);
+          const point = new Point({
+            longitude: coords.longitude,
+            latitude: coords.latitude,
+            z: coords.elevation,
+          });
+          const rotation = mergeRotation(parent, child);
+
+          const graphic = new Graphic({
+            geometry: point,
+            symbol: createModelSymbol(
+              child.fileUrl ?? "",
+              child.scale ?? { x: 1, y: 1, z: 1 },
+              rotation,
+            ),
+            attributes: {
+              id: child.id,
+              entityId: child.entities?.[0]?.id ?? null,
+              parentId: parent.id,
+              lodLevel: child.lodLevel ?? 1,
+              name: child.name,
+              fileUrl: child.fileUrl,
+              type: "scene-child",
+              parentPosition: parent.position ?? { x: 0, y: 0, z: 0 },
+              parentRotation: parent.rotation ?? { x: 0, y: 0, z: 0 },
+            },
+            popupTemplate: {
+              title: "{name}",
+              content: "Scene child model.",
+            },
+          });
+
+          layer.add(graphic);
+          return graphic;
+        });
+    };
+
+    const updateRootModels = async () => {
       for (const parent of rootScenes) {
         const currentRendered =
           renderedGraphicsRef.current[parent.id] ?? { root: null, children: [] };
@@ -151,136 +187,67 @@ export const useSceneLodLoader = (
             layer.remove(currentRendered.root);
             currentRendered.root = null;
           }
-          removeChildren(currentRendered);
           renderedGraphicsRef.current[parent.id] = currentRendered;
           continue;
         }
 
-        const parentLng = parent.position?.x ?? 0;
-        const parentLat = parent.position?.y ?? 0;
-        const parentElevation = parent.position?.z ?? 0;
-
-        if (isNear) {
+        if (shouldRenderChildren(parent)) {
           if (currentRendered.root) {
             layer.remove(currentRendered.root);
             currentRendered.root = null;
           }
-
-          if (currentRendered.children.length === 0) {
-            let children = parent.children ?? childrenCacheRef.current[parent.id] ?? [];
-            if (children.length === 0) {
-              try {
-                children = await fetchSceneChildren(parent.id, 1);
-                childrenCacheRef.current[parent.id] = children;
-              } catch (err) {
-                console.error("Failed to load scene children:", err);
-              }
-            }
-
-            currentRendered.children = children
-              .filter((child) => child.visible !== false && Boolean(child.fileUrl))
-              .flatMap((child) => {
-                const coords = projectChildOffset(parent, child);
-                const point = new Point({
-                  longitude: coords.longitude,
-                  latitude: coords.latitude,
-                  z: coords.elevation,
-                });
-                const rotation = mergeRotation(parent, child);
-                const entityId = child.entities?.[0]?.id ?? null;
-                const attributes = {
-                  id: child.id,
-                  entityId,
-                  parentId: parent.id,
-                  lodLevel: child.lodLevel ?? 1,
-                  name: child.name,
-                  fileUrl: child.fileUrl,
-                  type: "scene-child",
-                  parentPosition: parent.position ?? { x: 0, y: 0, z: 0 },
-                  parentRotation: parent.rotation ?? { x: 0, y: 0, z: 0 },
-                };
-                const popupTemplate = {
-                  title: "{name}",
-                  content: "Cấu phần 3D (LOD {lodLevel}) thuộc Scene.",
-                };
-
-                const graphic = new Graphic({
-                  geometry: point,
-                  symbol: createModelSymbol(
-                    child.fileUrl ?? "",
-                    child.scale ?? { x: 1, y: 1, z: 1 },
-                    rotation,
-                  ),
-                  attributes,
-                  popupTemplate,
-                });
-                layer.add(graphic);
-
-                if (!entityId) {
-                  return [graphic];
-                }
-
-                const hitTarget = new Graphic({
-                  geometry: point,
-                  symbol: createInspectHitTargetSymbol(),
-                  attributes: {
-                    ...attributes,
-                    type: "scene-inspect-proxy",
-                    inspectProxy: true,
-                  },
-                  popupTemplate,
-                });
-                layer.add(hitTarget);
-                return [graphic, hitTarget];
-              });
+          await renderChildren(parent, currentRendered);
+          if (currentRendered.children.length > 0) {
+            renderedGraphicsRef.current[parent.id] = currentRendered;
+            continue;
           }
-        } else {
-          removeChildren(currentRendered);
+        }
 
-          if (!currentRendered.root && parent.fileUrl) {
-            const point = new Point({
-              longitude: parentLng,
-              latitude: parentLat,
-              z: parentElevation,
-            });
+        removeChildren(currentRendered);
 
-            const graphic = new Graphic({
-              geometry: point,
-              symbol: createModelSymbol(
-                parent.fileUrl,
-                parent.scale ?? { x: 1, y: 1, z: 1 },
-                parent.rotation ?? { x: 0, y: 0, z: 0 },
-              ),
-              attributes: {
-                id: parent.id,
-                parentId: null,
-                lodLevel: 0,
-                name: parent.name,
-                fileUrl: parent.fileUrl,
-                type: "scene-root",
-                parentPosition: null,
-                parentRotation: null,
-              },
-              popupTemplate: {
-                title: "{name}",
-                content: "Mô hình tổng (LOD 0) thuộc Scene.",
-              },
-            });
+        if (!currentRendered.root && parent.fileUrl) {
+          const point = new Point({
+            longitude: parent.position?.x ?? 0,
+            latitude: parent.position?.y ?? 0,
+            z: parent.position?.z ?? 0,
+          });
 
-            layer.add(graphic);
-            currentRendered.root = graphic;
-          }
+          const graphic = new Graphic({
+            geometry: point,
+            symbol: createModelSymbol(
+              parent.fileUrl,
+              parent.scale ?? { x: 1, y: 1, z: 1 },
+              parent.rotation ?? { x: 0, y: 0, z: 0 },
+            ),
+            attributes: {
+              id: parent.id,
+              parentId: null,
+              lodLevel: 0,
+              name: parent.name,
+              fileUrl: parent.fileUrl,
+              type: "scene-root",
+              parentPosition: null,
+              parentRotation: null,
+            },
+            popupTemplate: {
+              title: "{name}",
+              content: "Scene root model (LOD 0).",
+            },
+          });
+
+          layer.add(graphic);
+          currentRendered.root = graphic;
         }
 
         renderedGraphicsRef.current[parent.id] = currentRendered;
       }
     };
 
-    const handle = watch(() => [view.zoom, view.camera], () => {
-      void updateLOD();
+    const handle = watch(() => [view.camera], () => {
+      void updateRootModels();
     });
 
-    void updateLOD();
+    void updateRootModels();
 
     return () => {
       handle.remove();
@@ -290,7 +257,7 @@ export const useSceneLodLoader = (
       });
       renderedGraphicsRef.current = {};
     };
-  }, [viewRef, graphicsLayerRef, rootScenes]);
+  }, [viewRef, graphicsLayerRef, rootScenes, sceneEditMode, sceneEditingNodeId]);
 
   return {
     rootScenes,

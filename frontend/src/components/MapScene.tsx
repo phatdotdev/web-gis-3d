@@ -137,6 +137,15 @@ const getEntityModelSize = (entity: BackendSpatialEntity) => {
   return Number.isFinite(size) && size > 0 ? size : 12;
 };
 
+const isSceneBackedEntity = (entity: BackendSpatialEntity) =>
+  Boolean(
+    entity.scene ||
+      entity.sceneId ||
+      entity.type === "scene_component" ||
+      entity.metadata?.sceneNodeId ||
+      entity.metadata?.parentSceneId,
+  );
+
 const extrudeSymbol = (color: string, height = 15) =>
   ({
     type: "polygon-3d",
@@ -992,7 +1001,7 @@ const MapScene = () => {
     modelLayer.removeAll();
 
     // 1. Add pins/models for spatial entities, independent of selected data layers
-    independentEntities.forEach((entity) => {
+    independentEntities.filter((entity) => !isSceneBackedEntity(entity)).forEach((entity) => {
       const center = getEntityCenter(entity.geometry);
       if (!center) return;
 
@@ -1292,16 +1301,21 @@ const MapScene = () => {
 
         let entityId: string | null = null;
         let clickedSceneGraphic: Graphic | null = null;
+        let clickedRootSceneGraphic: Graphic | null = null;
         for (const result of results) {
           if (result.type !== "graphic") continue;
           entityId = getInspectableEntityId(result.graphic?.attributes);
           if (entityId) break;
           const attrs = result.graphic?.attributes;
-          if (attrs && (attrs.type === "scene-child" || attrs.type === "scene-root")) {
+          if (attrs?.type === "scene-child") {
             clickedSceneGraphic = result.graphic;
             break;
           }
+          if (attrs?.type === "scene-root" && !clickedRootSceneGraphic) {
+            clickedRootSceneGraphic = result.graphic;
+          }
         }
+        clickedSceneGraphic = clickedSceneGraphic ?? clickedRootSceneGraphic;
 
         if (entityId) {
           try {

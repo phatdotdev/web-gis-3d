@@ -186,13 +186,20 @@ export const useSceneEditor = (
     const clickHandle = view.on("click", (event) => {
       void view.hitTest(event).then((response) => {
         // Find if we hit any graphic in the sceneLodLayer
-        const hit = response.results.find(
+        const hit =
+          response.results.find(
+            (result) =>
+              result.type === "graphic" &&
+              result.graphic.layer === layer &&
+              result.graphic.attributes?.type === "scene-child",
+          ) ??
+          response.results.find(
           (result) =>
             result.type === "graphic" &&
             result.graphic.layer === layer &&
             (result.graphic.attributes?.type === "scene-root" ||
               result.graphic.attributes?.type === "scene-child"),
-        );
+          );
 
         if (hit && hit.type === "graphic") {
           event.stopPropagation();
