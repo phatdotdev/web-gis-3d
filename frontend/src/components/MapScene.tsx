@@ -62,7 +62,11 @@ import {
   selectPlacementFileUrl,
   selectSceneLodLevelsBySceneId,
 } from "../store/mapSlice";
-import { createBackendLayer, getMapPinIcon, MODEL_DETAIL_SCALE } from "../layers/backendLayer";
+import {
+  createBackendLayer,
+  getMapPinIcon,
+  MODEL_DETAIL_SCALE,
+} from "../layers/backendLayer";
 import { getEntityCenter } from "../utils/geometry";
 import { loadBasemapStyles } from "../utils/basemapStyles";
 import type { TerrainMode } from "../types/map";
@@ -87,7 +91,9 @@ const applyTerrain = (map: Map, terrain: TerrainMode) => {
   map.ground.navigationConstraint = { type: "none" } as any;
 };
 
-const getInspectableEntityId = (attributes: Record<string, unknown> | null | undefined) => {
+const getInspectableEntityId = (
+  attributes: Record<string, unknown> | null | undefined,
+) => {
   if (!attributes) return null;
   if (attributes.entityId) return String(attributes.entityId);
   if (attributes.backendEntityId) return String(attributes.backendEntityId);
@@ -141,10 +147,10 @@ const getEntityModelSize = (entity: BackendSpatialEntity) => {
 const isSceneBackedEntity = (entity: BackendSpatialEntity) =>
   Boolean(
     entity.scene ||
-      entity.sceneId ||
-      entity.type === "scene_component" ||
-      entity.metadata?.sceneNodeId ||
-      entity.metadata?.parentSceneId,
+    entity.sceneId ||
+    entity.type === "scene_component" ||
+    entity.metadata?.sceneNodeId ||
+    entity.metadata?.parentSceneId,
   );
 
 const extrudeSymbol = (color: string, height = 15) =>
@@ -187,7 +193,11 @@ const activeVertexSymbol = {
   outline: { color: "#ffffff", width: 1.5 },
 } as any;
 
-const applySliceRotation = (sliceWidget: Slice | null, heading: number, tilt: number) => {
+const applySliceRotation = (
+  sliceWidget: Slice | null,
+  heading: number,
+  tilt: number,
+) => {
   const shape = sliceWidget?.viewModel.shape as any;
   if (!sliceWidget || !shape) return;
   sliceWidget.viewModel.tiltEnabled = true;
@@ -196,7 +206,8 @@ const applySliceRotation = (sliceWidget: Slice | null, heading: number, tilt: nu
   sliceWidget.viewModel.shape = shape;
 };
 
-const makeEditorId = () => `editor-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+const makeEditorId = () =>
+  `editor-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 
 const polygonMetrics = (geometry: unknown) => {
   if (!(geometry instanceof Polygon)) return {};
@@ -240,15 +251,19 @@ const editorFeatureFromGraphic = (graphic: Graphic) => {
     rotation: graphic.attributes.rotation ?? 0,
     height: graphic.attributes.height ?? 15,
     color: graphic.attributes.color ?? "#38bdf8",
-    elevation: graphic.geometry && "z" in graphic.geometry ? (graphic.geometry as Point).z ?? 0 : 0,
+    elevation:
+      graphic.geometry && "z" in graphic.geometry
+        ? ((graphic.geometry as Point).z ?? 0)
+        : 0,
     ...metrics,
   };
 };
 
 const syncGraphicTransformAttributes = (graphic: Graphic) => {
   if (graphic.attributes?.editorKind !== "model") return;
-  const symbolLayer = (graphic.symbol as any)?.symbolLayers?.getItemAt?.(0)
-    ?? (graphic.symbol as any)?.symbolLayers?.[0];
+  const symbolLayer =
+    (graphic.symbol as any)?.symbolLayers?.getItemAt?.(0) ??
+    (graphic.symbol as any)?.symbolLayers?.[0];
   if (!symbolLayer) return;
   const height = Number(symbolLayer.height ?? symbolLayer.size);
   const heading = Number(symbolLayer.heading ?? symbolLayer.rotation);
@@ -281,7 +296,10 @@ const applyEditorSymbol = (graphic: Graphic) => {
 };
 
 const persistEditorGraphic = async (graphic: Graphic) => {
-  const backendEntityId = graphic.attributes?.backendEntityId as string | null | undefined;
+  const backendEntityId = graphic.attributes?.backendEntityId as
+    | string
+    | null
+    | undefined;
   if (!backendEntityId || graphic.attributes?.editorKind !== "model") return;
   syncGraphicTransformAttributes(graphic);
   const point = graphic.geometry instanceof Point ? graphic.geometry : null;
@@ -345,14 +363,19 @@ const MapScene = () => {
   const editorGroundLayerRef = useRef<GraphicsLayer | null>(null);
   const sketchViewModelRef = useRef<SketchViewModel | null>(null);
   const selectedEditorGraphicRef = useRef<Graphic | null>(null);
-  const sceneServiceLayerRef = useRef<BuildingSceneLayer | SceneLayer | null>(null);
+  const sceneServiceLayerRef = useRef<BuildingSceneLayer | SceneLayer | null>(
+    null,
+  );
   const sliceWidgetRef = useRef<Slice | null>(null);
   const doorsSublayerRef = useRef<any>(null);
   const sceneLodLayerRef = useRef<GraphicsLayer | null>(null);
   const positioningPinsLayerRef = useRef<GraphicsLayer | null>(null);
   const independentModelLayerRef = useRef<GraphicsLayer | null>(null);
 
-  const { rootScenes, reloadScenes } = useSceneLodLoader(viewRef, sceneLodLayerRef);
+  const { rootScenes, reloadScenes } = useSceneLodLoader(
+    viewRef,
+    sceneLodLayerRef,
+  );
 
   useSceneEditor(viewRef, sceneLodLayerRef, () => {
     void reloadScenes();
@@ -489,7 +512,11 @@ const MapScene = () => {
 
     const selectEditorGraphic = (graphic: Graphic | null) => {
       selectedEditorGraphicRef.current = graphic;
-      dispatch(setEditorSelectedFeature(graphic ? editorFeatureFromGraphic(graphic) : null));
+      dispatch(
+        setEditorSelectedFeature(
+          graphic ? editorFeatureFromGraphic(graphic) : null,
+        ),
+      );
     };
 
     const sketchCreateHandle = sketchViewModel.on("create", (event) => {
@@ -665,23 +692,28 @@ const MapScene = () => {
     map.add(layer);
 
     if (editorSceneLayerType === "building") {
-      layer.when(() => {
-        const buildingLayer = layer as BuildingSceneLayer;
-        buildingLayer.allSublayers.forEach((sublayer: any) => {
-          if (sublayer.modelName === "FullModel") {
-            sublayer.visible = true;
-          } else if (sublayer.modelName === "Overview" || sublayer.modelName === "Rooms") {
-            sublayer.visible = false;
-          } else {
-            sublayer.visible = true;
-          }
-          if (sublayer.modelName === "Doors") {
-            doorsSublayerRef.current = sublayer;
-          }
+      layer
+        .when(() => {
+          const buildingLayer = layer as BuildingSceneLayer;
+          buildingLayer.allSublayers.forEach((sublayer: any) => {
+            if (sublayer.modelName === "FullModel") {
+              sublayer.visible = true;
+            } else if (
+              sublayer.modelName === "Overview" ||
+              sublayer.modelName === "Rooms"
+            ) {
+              sublayer.visible = false;
+            } else {
+              sublayer.visible = true;
+            }
+            if (sublayer.modelName === "Doors") {
+              doorsSublayerRef.current = sublayer;
+            }
+          });
+        })
+        .catch((err) => {
+          console.error("Failed to load BuildingSceneLayer:", err);
         });
-      }).catch((err) => {
-        console.error("Failed to load BuildingSceneLayer:", err);
-      });
     }
 
     return () => {
@@ -711,11 +743,14 @@ const MapScene = () => {
     if (editorSliceEnabled) {
       sliceWidget.visible = true;
       sliceWidget.viewModel.tiltEnabled = true;
-      void sliceWidget.viewModel.start().then(() => {
-        applySliceRotation(sliceWidget, editorSliceHeading, editorSliceTilt);
-      }).catch((err) => {
-        console.error("Failed to start slice placement:", err);
-      });
+      void sliceWidget.viewModel
+        .start()
+        .then(() => {
+          applySliceRotation(sliceWidget, editorSliceHeading, editorSliceTilt);
+        })
+        .catch((err) => {
+          console.error("Failed to start slice placement:", err);
+        });
     } else {
       sliceWidget.visible = false;
       sliceWidget.viewModel.clear();
@@ -723,7 +758,11 @@ const MapScene = () => {
   }, [editorSliceEnabled]);
 
   useEffect(() => {
-    applySliceRotation(sliceWidgetRef.current, editorSliceHeading, editorSliceTilt);
+    applySliceRotation(
+      sliceWidgetRef.current,
+      editorSliceHeading,
+      editorSliceTilt,
+    );
   }, [editorSliceHeading, editorSliceTilt]);
 
   useEffect(() => {
@@ -771,8 +810,14 @@ const MapScene = () => {
     const controller = new AbortController();
 
     const hydratePointLayer = async (layer: (typeof renderLayers)[number]) => {
-      const isPointLayer = layer.type.toLowerCase() === "point" || layer.type === "Point";
-      if (!isPointLayer || layer.featureCollection || !layer.featureCollectionUrl) return layer;
+      const isPointLayer =
+        layer.type.toLowerCase() === "point" || layer.type === "Point";
+      if (
+        !isPointLayer ||
+        layer.featureCollection ||
+        !layer.featureCollectionUrl
+      )
+        return layer;
 
       try {
         const response = await fetch(toBackendUrl(layer.featureCollectionUrl), {
@@ -818,7 +863,9 @@ const MapScene = () => {
 
     const addRenderLayers = async () => {
       if (renderLayers.length === 0) return;
-      const hydratedLayers = await Promise.all(renderLayers.map(hydratePointLayer));
+      const hydratedLayers = await Promise.all(
+        renderLayers.map(hydratePointLayer),
+      );
       if (!active) return;
 
       const created = hydratedLayers.map((layer) =>
@@ -869,10 +916,7 @@ const MapScene = () => {
     }
 
     view
-      .goTo(
-        targetObj,
-        { duration: 1500, easing: "ease-in-out" },
-      )
+      .goTo(targetObj, { duration: 1500, easing: "ease-in-out" })
       .then(() => dispatch(clearGoToTarget()))
       .catch(() => undefined);
   }, [goToTarget, dispatch]);
@@ -899,7 +943,7 @@ const MapScene = () => {
             longitude: mapPoint.longitude,
             latitude: mapPoint.latitude,
             elevation: mapPoint.z || 0,
-          })
+          }),
         );
         dispatch(setPickingCoordinateActive(false));
       }
@@ -942,16 +986,20 @@ const MapScene = () => {
         const graphic = layer.graphics.find((g) => {
           const attrs = g.attributes;
           if (!attrs) return false;
-          return attrs.id === inspectedEntity.id ||
-                 attrs.entityId === inspectedEntity.id ||
-                 attrs.backendEntityId === inspectedEntity.id;
+          return (
+            attrs.id === inspectedEntity.id ||
+            attrs.entityId === inspectedEntity.id ||
+            attrs.backendEntityId === inspectedEntity.id
+          );
         });
 
         if (graphic && active) {
           try {
             const layerView = await view.whenLayerView(layer);
             if (active) {
-              highlightHandleRef.current = (layerView as any).highlight(graphic);
+              highlightHandleRef.current = (layerView as any).highlight(
+                graphic,
+              );
             }
           } catch (err) {
             console.error("Failed to highlight graphic in GraphicsLayer:", err);
@@ -970,17 +1018,18 @@ const MapScene = () => {
           const layerView = await view.whenLayerView(layer);
           const query = layer.createQuery();
           query.where = `id = '${inspectedEntity.id}' OR entityId = '${inspectedEntity.id}' OR backendEntityId = '${inspectedEntity.id}'`;
-          
+
           const results = await layer.queryFeatures(query);
           if (results.features.length > 0 && active) {
-            highlightHandleRef.current = (layerView as any).highlight(results.features[0]);
+            highlightHandleRef.current = (layerView as any).highlight(
+              results.features[0],
+            );
             return;
           }
         } catch (err) {
           // Ignore query failures
         }
       }
-
     };
 
     void applyHighlight();
@@ -1003,107 +1052,114 @@ const MapScene = () => {
     modelLayer.removeAll();
 
     // 1. Add pins/models for spatial entities, independent of selected data layers
-    independentEntities.filter((entity) => !isSceneBackedEntity(entity)).forEach((entity) => {
-      const center = getEntityCenter(entity.geometry);
-      if (!center) return;
+    independentEntities
+      .filter((entity) => !isSceneBackedEntity(entity))
+      .forEach((entity) => {
+        const center = getEntityCenter(entity.geometry);
+        if (!center) return;
 
-      if (showPositioningIcons) {
-        const color = entity.color || "#2563eb";
-        const symbol = {
-          type: "point-3d",
-          symbolLayers: [
-            {
-              type: "icon",
-              resource: { href: getMapPinIcon(color) },
-              size: 28,
-            },
-          ],
-        } as any;
+        if (showPositioningIcons) {
+          const color = entity.color || "#2563eb";
+          const symbol = {
+            type: "point-3d",
+            symbolLayers: [
+              {
+                type: "icon",
+                resource: { href: getMapPinIcon(color) },
+                size: 28,
+              },
+            ],
+          } as any;
 
-        pinsLayer.add(
+          pinsLayer.add(
+            new Graphic({
+              geometry: new Point({
+                longitude: center.lng,
+                latitude: center.lat,
+                z: entity.elevation ?? 0,
+              }),
+              symbol,
+              attributes: {
+                id: entity.id,
+                name: entity.name || "Spatial entity",
+                type: "spatial-entity",
+                backendEntityId: entity.id,
+              },
+              popupTemplate: {
+                title: "{name}",
+                content: "Spatial entity.",
+              },
+            }),
+          );
+        }
+
+        const modelUrl = getEntityModelUrl(entity);
+        if (!show3DModels || !modelUrl) return;
+
+        modelLayer.add(
           new Graphic({
             geometry: new Point({
               longitude: center.lng,
               latitude: center.lat,
               z: entity.elevation ?? 0,
             }),
-            symbol,
+            symbol: modelSymbol(
+              modelUrl,
+              getEntityModelSize(entity),
+              entity.rotationZ ?? 0,
+            ),
             attributes: {
               id: entity.id,
+              entityId: entity.id,
+              backendEntityId: entity.id,
               name: entity.name || "Spatial entity",
               type: "spatial-entity",
-              backendEntityId: entity.id,
             },
             popupTemplate: {
               title: "{name}",
-              content: "Spatial entity.",
+              content: "Spatial entity model.",
             },
           }),
         );
-      }
+      });
 
-      const modelUrl = getEntityModelUrl(entity);
-      if (!show3DModels || !modelUrl) return;
+    // 2. Add pins for root scenes
+    if (showPositioningIcons)
+      rootScenes.forEach((scene) => {
+        if (!scene.position || !scene.visible) return;
 
-      modelLayer.add(
-        new Graphic({
+        const symbol = {
+          type: "point-3d",
+          symbolLayers: [
+            {
+              type: "icon",
+              resource: { href: getMapPinIcon("#10b981") },
+              size: 28,
+            },
+          ],
+        } as any;
+
+        const graphic = new Graphic({
           geometry: new Point({
-            longitude: center.lng,
-            latitude: center.lat,
-            z: entity.elevation ?? 0,
+            longitude: scene.position.x,
+            latitude: scene.position.y,
+            z: scene.position.z ?? 0,
           }),
-          symbol: modelSymbol(modelUrl, getEntityModelSize(entity), entity.rotationZ ?? 0),
+          symbol,
           attributes: {
-            id: entity.id,
-            entityId: entity.id,
-            backendEntityId: entity.id,
-            name: entity.name || "Spatial entity",
-            type: "spatial-entity",
+            id: scene.id,
+            name: scene.name || "Scene",
+            type: "scene-root",
+            backendSceneId: scene.id,
           },
           popupTemplate: {
             title: "{name}",
-            content: "Spatial entity model.",
+            content: "Scene 3D.",
           },
-        }),
-      );
-    });
+        });
 
-    // 2. Add pins for root scenes
-    if (showPositioningIcons) rootScenes.forEach((scene) => {
-      if (!scene.position || !scene.visible) return;
-
-      const symbol = {
-        type: "point-3d",
-        symbolLayers: [
-          {
-            type: "icon",
-            resource: { href: getMapPinIcon("#10b981") },
-            size: 28,
-          },
-        ],
-      } as any;
-
-      const graphic = new Graphic({
-        geometry: new Point({
-          longitude: scene.position.x,
-          latitude: scene.position.y,
-          z: scene.position.z ?? 0,
-        }),
-        symbol,
-        attributes: {
-          id: scene.id,
-          name: scene.name || "Scene",
-          type: "scene-root",
-          backendSceneId: scene.id,
-        },
-        popupTemplate: {
-          title: "{name}",
-          content: "Scene 3D.",
-        },
+        pinsLayer.add(graphic);
       });
-
-      pinsLayer.add(graphic);
-    });
   }, [independentEntities, rootScenes, show3DModels, showPositioningIcons]);
 
   useEffect(() => {
@@ -1134,7 +1190,9 @@ const MapScene = () => {
       const point = view.toMap({ x: event.x, y: event.y });
       if (!point) return;
 
-      const model = editorModels.find((item) => item.id === editorSelectedModel);
+      const model = editorModels.find(
+        (item) => item.id === editorSelectedModel,
+      );
       if (!model?.assetUrl) return;
       const graphic = new Graphic({
         geometry: new Point({
@@ -1187,14 +1245,16 @@ const MapScene = () => {
         metadata: {
           editorCreated: true,
         },
-      }).then((entity) => {
-        graphic.attributes = {
-          ...(graphic.attributes ?? {}),
-          backendEntityId: entity.id,
-        };
-      }).catch((err) => {
-        console.error("Failed to persist placed model:", err);
-      });
+      })
+        .then((entity) => {
+          graphic.attributes = {
+            ...(graphic.attributes ?? {}),
+            backendEntityId: entity.id,
+          };
+        })
+        .catch((err) => {
+          console.error("Failed to persist placed model:", err);
+        });
     });
 
     return () => {
@@ -1271,7 +1331,10 @@ const MapScene = () => {
     const sketchViewModel = sketchViewModelRef.current;
     const graphic = selectedEditorGraphicRef.current;
     if (!graphic) return;
-    const backendEntityId = graphic.attributes?.backendEntityId as string | null | undefined;
+    const backendEntityId = graphic.attributes?.backendEntityId as
+      | string
+      | null
+      | undefined;
 
     sketchViewModel?.cancel();
     editorModelLayerRef.current?.remove(graphic);
@@ -1323,7 +1386,9 @@ const MapScene = () => {
           try {
             const entity = await fetchSpatialEntity(entityId);
             dispatch(setInspectedEntity(entity));
-            dispatch(setSceneEditingNodeId(entity.scene?.id || entity.sceneId || null));
+            dispatch(
+              setSceneEditingNodeId(entity.scene?.id || entity.sceneId || null),
+            );
           } catch {
             // Entity not found in backend (could be editor graphic), clear
             dispatch(setInspectedEntity(null));
@@ -1333,10 +1398,12 @@ const MapScene = () => {
           try {
             const attrs = clickedSceneGraphic.attributes ?? {};
             const sceneId = attrs.id;
-            const scene = attrs.sceneNode ?? await fetchSceneById(sceneId);
+            const scene = attrs.sceneNode ?? (await fetchSceneById(sceneId));
             const parentScene = attrs.parentScene ?? scene.parent ?? null;
             const rootScene = attrs.rootScene ?? scene;
-            const rootSceneId = String(attrs.rootSceneId ?? rootScene.id ?? scene.id);
+            const rootSceneId = String(
+              attrs.rootSceneId ?? rootScene.id ?? scene.id,
+            );
             const activeLodLevel = sceneLodLevelsBySceneId[rootSceneId] ?? 0;
             const point = clickedSceneGraphic.geometry as Point;
             const virtualEntity: BackendSpatialEntity = {
@@ -1359,14 +1426,18 @@ const MapScene = () => {
               metadata: {
                 ...(scene.metadata ?? {}),
                 activeLodLevel,
-                breadcrumb: parentScene?.name ? `${parentScene.name} > ${scene.name}` : scene.name,
+                breadcrumb: parentScene?.name
+                  ? `${parentScene.name} > ${scene.name}`
+                  : scene.name,
                 childCount: scene.children?.length ?? 0,
                 lodLevel: scene.lodLevel ?? 0,
                 parentSceneId: parentScene?.id ?? null,
                 parentSceneName: parentScene?.name ?? null,
                 rootSceneId,
                 rootSceneName: rootScene.name ?? scene.name,
-                description: scene.description ?? `Khối mô hình LOD ${scene.lodLevel ?? 0}`,
+                description:
+                  scene.description ??
+                  `Khối mô hình LOD ${scene.lodLevel ?? 0}`,
               },
               sceneId: scene.id,
               scene: scene,
@@ -1391,7 +1462,14 @@ const MapScene = () => {
     return () => {
       clickHandle.remove();
     };
-  }, [pickingCoordinateActive, sceneEditMode, editorOpen, editorTool, sceneLodLevelsBySceneId, dispatch]);
+  }, [
+    pickingCoordinateActive,
+    sceneEditMode,
+    editorOpen,
+    editorTool,
+    sceneLodLevelsBySceneId,
+    dispatch,
+  ]);
 
   // Tự động bao viền xanh (highlight) cho đối tượng 3D được chọn
   useEffect(() => {
@@ -1407,22 +1485,28 @@ const MapScene = () => {
         highlightHandle = null;
       }
 
-      const targetId = inspectedEntity?.id || inspectedEntity?.sceneId || sceneEditingNodeId;
+      const targetId =
+        inspectedEntity?.id || inspectedEntity?.sceneId || sceneEditingNodeId;
       if (!targetId) return;
 
       let targetGraphic = sceneLodLayer.graphics.find(
-        (g) => g.attributes?.id === targetId || g.attributes?.entityId === targetId
+        (g) =>
+          g.attributes?.id === targetId || g.attributes?.entityId === targetId,
       );
 
       if (!targetGraphic && independentModelLayerRef.current) {
         targetGraphic = independentModelLayerRef.current.graphics.find(
-          (g) => g.attributes?.backendEntityId === targetId || g.attributes?.entityId === targetId
+          (g) =>
+            g.attributes?.backendEntityId === targetId ||
+            g.attributes?.entityId === targetId,
         );
       }
 
       if (!targetGraphic && editorModelLayerRef.current) {
         targetGraphic = editorModelLayerRef.current.graphics.find(
-          (g) => g.attributes?.backendEntityId === targetId || g.attributes?.editorId === targetId
+          (g) =>
+            g.attributes?.backendEntityId === targetId ||
+            g.attributes?.editorId === targetId,
         );
       }
 
