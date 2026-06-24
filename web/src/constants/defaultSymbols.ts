@@ -2,7 +2,7 @@ import type { ResolvedSpatialStyle } from '../types/map'
 import type { Model3DConfig } from '../types/model3d'
 
 export const defaultSpatialStyle: ResolvedSpatialStyle = {
-  pinColor: '#00897b',
+  pinColor: '#c62828',
   pinIcon: 'map-pin',
   lineColor: '#004c97',
   lineWidth: 3,

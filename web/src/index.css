@@ -311,6 +311,12 @@ label {
   color: var(--color-text-primary);
 }
 
+.icon-button.active {
+  background: rgba(0, 137, 123, 0.12);
+  border-color: var(--color-teal);
+  color: var(--color-teal);
+}
+
 /* ─── App Layout ─── */
 .app-root {
   position: relative;
@@ -366,7 +372,7 @@ label {
 /* ─── Floating Panel ─── */
 .floating-panel {
   position: absolute;
-  top: 16px;
+  top: 72px;
   bottom: 16px;
   z-index: 40;
   width: var(--panel-width);
@@ -431,7 +437,7 @@ label {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: var(--space-4);
+  padding: var(--space-5) var(--space-4) var(--space-4);
 }
 
 .panel-section-header {
@@ -702,7 +708,7 @@ label {
 .toggle-button {
   position: absolute;
   z-index: 45;
-  top: 16px;
+  top: 88px;
   width: 28px;
   height: 28px;
   border-radius: var(--radius-none);
@@ -725,4 +731,44 @@ label {
 
 .toggle-button-left {
   left: 16px;
+}
+
+.map-custom-toolbar {
+  box-shadow: var(--shadow-md);
+}
+
+.panel-close-button {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 3;
+  background: var(--color-surface);
+}
+
+.panel-close-button:hover {
+  color: var(--color-error);
+  border-color: var(--color-border-dark);
+}
+
+@media (max-width: 768px) {
+  .floating-panel {
+    top: 64px;
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+
+  .floating-panel-right {
+    left: 12px;
+  }
+
+  .map-toolbar {
+    right: 12px;
+    top: 12px;
+  }
+
+  .toggle-button {
+    top: 76px;
+  }
 }

@@ -30,7 +30,9 @@ export function useSpatialEntityManagement() {
   }, [])
 
   useEffect(() => {
-    void refreshEntities()
+    queueMicrotask(() => {
+      void refreshEntities()
+    })
   }, [refreshEntities])
 
   return {

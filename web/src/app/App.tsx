@@ -7,7 +7,9 @@ import { ArcgisSceneMap } from '../features/map/components/ArcgisSceneMap'
 import { MapInspector } from '../features/map/components/MapInspector'
 import { MapToolbar } from '../features/map/components/MapToolbar'
 import { useArcgisScene, type ArcgisMapContexts } from '../features/map/hooks/useArcgisScene'
+import { useEditable3DModels } from '../features/map/hooks/useEditable3DModels'
 import { useMapSelection } from '../features/map/hooks/useMapSelection'
+import { useSliceWidget } from '../features/map/hooks/useSliceWidget'
 import { SpatialEntityPanel } from '../features/spatial-entity-management/components/SpatialEntityPanel'
 import { useSpatialEntityManagement } from '../features/spatial-entity-management/hooks/useSpatialEntityManagement'
 import { exportCurrentDataAsJson } from '../services/mock-backend/fileStorageService'
@@ -43,6 +45,8 @@ export default function App() {
   const [renderVersion, setRenderVersion] = useState(0)
   const [leftTab, setLeftTab] = useState<LeftTab>('layers')
   const [leftPanelOpen, setLeftPanelOpen] = useState(true)
+  const [editor3DEnabled, setEditor3DEnabled] = useState(false)
+  const [sliceEnabled, setSliceEnabled] = useState(false)
   const [pickedCoordinate, setPickedCoordinate] = useState<{ longitude: number; latitude: number; z: number } | null>(null)
 
   const featureRegistryRef = useRef(new Map<string, NormalizedSpatialFeature>())
@@ -68,6 +72,14 @@ export default function App() {
     // Force dependency on renderVersion
     void renderVersion
     return map
+  }, [renderVersion])
+
+  const editableModelFeatures = useMemo(() => {
+    const features = [...featureRegistryRef.current.values()].filter(
+      (feature) => feature.geometryType === 'Point' && Boolean(feature.model3D?.enabled && feature.model3D.modelUrl),
+    )
+    void renderVersion
+    return features
   }, [renderVersion])
 
   const registerFeatures = useCallback((features: NormalizedSpatialFeature[]) => {
@@ -209,6 +221,16 @@ export default function App() {
     [setContexts],
   )
 
+  const clearAllHighlights = useCallback(() => {
+    const contexts = contextsRef.current
+    if (!contexts) {
+      return
+    }
+
+    clearHighlight(contexts.layer)
+    clearHighlight(contexts.entity)
+  }, [contextsRef])
+
   const handleFeatureClick = useCallback(
     (featureId: string) => {
       const feature = featureRegistryRef.current.get(featureId)
@@ -222,7 +244,9 @@ export default function App() {
         layerName: feature.layerId ? layerNameById.get(feature.layerId) : undefined,
       }
       setSelectedFeature(inspectorFeature)
-      highlightFeature(contexts.layer, feature)
+      clearHighlight(contexts.layer)
+      clearHighlight(contexts.entity)
+      highlightFeature(feature.sourceType === 'entity' ? contexts.entity : contexts.layer, feature)
     },
     [contextsRef, layerNameById, setSelectedFeature],
   )
@@ -232,12 +256,9 @@ export default function App() {
   }, [])
 
   const closeInspector = useCallback(() => {
-    const contexts = contextsRef.current
-    if (contexts) {
-      clearHighlight(contexts.layer)
-    }
+    clearAllHighlights()
     clearSelection()
-  }, [clearSelection, contextsRef])
+  }, [clearAllHighlights, clearSelection])
 
   async function toggleLayer(layer: LayerConfig) {
     const nextLayer = { ...layer, visible: !layer.visible }
@@ -257,6 +278,7 @@ export default function App() {
     const contexts = contextsRef.current
     if (contexts) {
       removeFeaturesBySource(contexts.layer, 'layer', layerId)
+      clearAllHighlights()
     }
     unregisterBySource('layer', layerId)
     normalizedLayerCacheRef.current.delete(layerId)
@@ -290,6 +312,7 @@ export default function App() {
     setEntities((current) => current.filter((entity) => entity.entityId !== entityId))
     if (contexts) {
       removeFeaturesBySource(contexts.entity, 'entity', entityId)
+      clearAllHighlights()
     }
     unregisterBySource('entity', entityId)
   }
@@ -303,8 +326,14 @@ export default function App() {
 
   function zoomItem(featureId: string) {
     const contexts = contextsRef.current
-    if (contexts) {
-      // Try layer context first, then entity context
+    if (!contexts) {
+      return
+    }
+
+    const feature = featureRegistryRef.current.get(featureId)
+    if (feature?.sourceType === 'entity') {
+      void zoomToFeature(contexts.entity, featureId)
+    } else {
       void zoomToFeature(contexts.layer, featureId)
     }
   }
@@ -327,7 +356,12 @@ export default function App() {
   }
 
   function toggleSelectedModel(featureId: string) {
-    const graphics = contextsRef.current?.layer.graphicIndex.get(featureId)
+    const contexts = contextsRef.current
+    const feature = featureRegistryRef.current.get(featureId)
+    const graphics =
+      feature?.sourceType === 'entity'
+        ? contexts?.entity.graphicIndex.get(featureId)
+        : contexts?.layer.graphicIndex.get(featureId)
     graphics?.forEach((graphic) => {
       const attributes = graphic.attributes as Record<string, unknown>
       if (attributes.appGraphicRole === 'model') {
@@ -347,6 +381,19 @@ export default function App() {
   function selectFeatureById(featureId: string) {
     handleFeatureClick(featureId)
   }
+
+  useEditable3DModels({
+    enabled: editor3DEnabled,
+    view: mapReady ? contextsRef.current?.layer.view ?? null : null,
+    features: editableModelFeatures,
+    entities,
+    onEntityEdited: upsertEntity,
+  })
+
+  useSliceWidget({
+    enabled: sliceEnabled,
+    view: mapReady ? contextsRef.current?.layer.view ?? null : null,
+  })
 
   const loadedFeatureCount = featureRegistryRef.current.size + renderVersion * 0
 
@@ -387,7 +434,11 @@ export default function App() {
         onResetView={resetView}
         onClearSelection={closeInspector}
         onReloadVisible={() => void renderAllVisible(true)}
+        onToggleEditor3D={() => setEditor3DEnabled((value) => !value)}
+        onToggleSlice={() => setSliceEnabled((value) => !value)}
         loadedFeatureCount={loadedFeatureCount}
+        editor3DEnabled={editor3DEnabled}
+        sliceEnabled={sliceEnabled}
       />
 
       {/* ── Left Floating Panel ── */}
@@ -447,7 +498,7 @@ export default function App() {
         </aside>
       ) : (
         <button
-          className="toggle-button toggle-button-left"
+          className="toggle-button toggle-button-left map-custom-toolbar"
           type="button"
           onClick={() => setLeftPanelOpen(true)}
           title="Hiện bảng quản lý"

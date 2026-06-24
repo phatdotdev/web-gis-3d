@@ -8,6 +8,7 @@ import SceneView from '@arcgis/core/views/SceneView'
 import { useEffect, useRef } from 'react'
 import type { ArcgisMapContexts } from '../hooks/useArcgisScene'
 import { readFeatureIdFromHitTest } from '../../../utils/map-renderer/hitTestUtils'
+import { DEFAULT_BASEMAP, DEFAULT_GROUND } from '../constants'
 
 type ArcgisSceneMapProps = {
   onReady: (contexts: ArcgisMapContexts) => void
@@ -35,8 +36,8 @@ export function ArcgisSceneMap({ onReady, onFeatureClick, onMapClick }: ArcgisSc
     const highlightLayer = new GraphicsLayer({ id: 'app-highlight-graphics', title: 'Selection highlight' })
 
     const map = new ArcGISMap({
-      basemap: 'osm',
-      ground: 'world-elevation',
+      basemap: DEFAULT_BASEMAP,
+      ground: DEFAULT_GROUND,
       layers: [layerGraphicsLayer, entityGraphicsLayer, modelLayer, highlightLayer],
     })
 
@@ -89,7 +90,12 @@ export function ArcgisSceneMap({ onReady, onFeatureClick, onMapClick }: ArcgisSc
       const featureId = readFeatureIdFromHitTest(hitTest)
       if (featureId) {
         onFeatureClick(featureId)
-      } else if (onMapClick && event.mapPoint) {
+      } else if (
+        onMapClick &&
+        event.mapPoint &&
+        typeof event.mapPoint.longitude === 'number' &&
+        typeof event.mapPoint.latitude === 'number'
+      ) {
         onMapClick({
           longitude: event.mapPoint.longitude,
           latitude: event.mapPoint.latitude,

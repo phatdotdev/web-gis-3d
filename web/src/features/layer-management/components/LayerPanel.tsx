@@ -51,6 +51,9 @@ type DraftLayer = {
   pinColor: string
   lineProfile: 'circle' | 'quad'
   modelUrl: string
+  modelSize: number
+  modelHeading: number
+  modelElevationOffset: number
 }
 
 const defaultDraft: DraftLayer = {
@@ -62,6 +65,9 @@ const defaultDraft: DraftLayer = {
   pinColor: '#00897b',
   lineProfile: 'circle',
   modelUrl: '',
+  modelSize: 5,
+  modelHeading: 0,
+  modelElevationOffset: 0,
 }
 
 export function LayerPanel({
@@ -101,6 +107,9 @@ export function LayerPanel({
       pinColor: layer.style.pinColor ?? '#00897b',
       lineProfile: layer.style.lineProfile ?? 'circle',
       modelUrl: layer.model3D?.modelUrl ?? '',
+      modelSize: layer.model3D?.scale?.x ?? 5,
+      modelHeading: layer.model3D?.rotation?.z ?? 0,
+      modelElevationOffset: layer.model3D?.altitudeOffset ?? 0,
     })
     setIsFormOpen(true)
   }
@@ -132,9 +141,9 @@ export function LayerPanel({
       model3D: {
         enabled: !!draft.modelUrl,
         modelUrl: draft.modelUrl || undefined,
-        scale: existingLayer?.model3D?.scale ?? { x: 5, y: 5, z: 5 },
-        rotation: existingLayer?.model3D?.rotation ?? { x: 0, y: 0, z: 0 },
-        altitudeOffset: existingLayer?.model3D?.altitudeOffset ?? 0,
+        scale: { x: draft.modelSize, y: draft.modelSize, z: draft.modelSize },
+        rotation: { x: existingLayer?.model3D?.rotation?.x ?? 0, y: existingLayer?.model3D?.rotation?.y ?? 0, z: draft.modelHeading },
+        altitudeOffset: draft.modelElevationOffset,
       },
     }
     onSaveLayer(layer)
@@ -145,6 +154,11 @@ export function LayerPanel({
 
   return (
     <div className="panel-content">
+      {onClose && (
+        <button className="icon-button panel-close-button" type="button" onClick={onClose} title="Đóng panel">
+          <X size={16} />
+        </button>
+      )}
       <div className="panel-section-header">
         <div>
           <h2 className="section-title">Quản lý lớp dữ liệu</h2>
@@ -155,11 +169,6 @@ export function LayerPanel({
             <Plus size={14} />
             Thêm lớp dữ liệu
           </button>
-          {onClose && (
-            <button className="icon-button" type="button" onClick={onClose} title="Đóng panel">
-              <X size={16} />
-            </button>
-          )}
         </div>
       </div>
 
@@ -283,13 +292,46 @@ export function LayerPanel({
                   if (!file) return
                   try {
                     const ref = await uploadModelFile(file)
-                    setDraft((d) => ({ ...d, modelUrl: ref.objectUrl }))
+                    setDraft((d) => ({ ...d, modelUrl: ref.objectUrl ?? '' }))
                   } catch (err) {
                     console.error('Lỗi upload mô hình:', err)
                     alert('Lỗi upload mô hình 3D')
                   }
                 }}
               />
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                <div>
+                  <label className="form-label">Size (m)</label>
+                  <input
+                    className="input h-9"
+                    type="number"
+                    min="0.1"
+                    step="0.5"
+                    value={draft.modelSize}
+                    onChange={(e) => setDraft((d) => ({ ...d, modelSize: Math.max(Number(e.target.value) || 0.1, 0.1) }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Heading</label>
+                  <input
+                    className="input h-9"
+                    type="number"
+                    step="1"
+                    value={draft.modelHeading}
+                    onChange={(e) => setDraft((d) => ({ ...d, modelHeading: Number(e.target.value) || 0 }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Z offset</label>
+                  <input
+                    className="input h-9"
+                    type="number"
+                    step="0.5"
+                    value={draft.modelElevationOffset}
+                    onChange={(e) => setDraft((d) => ({ ...d, modelElevationOffset: Number(e.target.value) || 0 }))}
+                  />
+                </div>
+              </div>
               {draft.modelUrl && (
                 <p className="mt-1 text-xs text-[var(--color-success)] truncate">Mô hình: {draft.modelUrl}</p>
               )}

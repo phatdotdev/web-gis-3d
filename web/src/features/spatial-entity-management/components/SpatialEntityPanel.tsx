@@ -25,6 +25,8 @@ type DraftEntity = {
   pinColor: string
   lineProfile: 'circle' | 'quad'
   modelUrl: string
+  modelSize: number
+  modelHeading: number
   description: string
 }
 
@@ -37,6 +39,8 @@ const defaultDraft: DraftEntity = {
   pinColor: '#c62828',
   lineProfile: 'circle',
   modelUrl: '',
+  modelSize: 5,
+  modelHeading: 0,
   description: '',
 }
 
@@ -59,12 +63,14 @@ export function SpatialEntityPanel({
 
   useEffect(() => {
     if (isPickingLocation && pickedCoordinate && draft.geometryType === 'Point') {
-      setDraft((d) => ({
-        ...d,
-        coordinatesText: `[${pickedCoordinate.longitude.toFixed(6)}, ${pickedCoordinate.latitude.toFixed(6)}, ${d.elevationZ}]`,
-      }))
-      setIsPickingLocation(false)
-      onClearPickedCoordinate?.()
+      queueMicrotask(() => {
+        setDraft((d) => ({
+          ...d,
+          coordinatesText: `[${pickedCoordinate.longitude.toFixed(6)}, ${pickedCoordinate.latitude.toFixed(6)}, ${d.elevationZ}]`,
+        }))
+        setIsPickingLocation(false)
+        onClearPickedCoordinate?.()
+      })
     }
   }, [isPickingLocation, pickedCoordinate, draft.geometryType, onClearPickedCoordinate])
 
@@ -84,6 +90,8 @@ export function SpatialEntityPanel({
       pinColor: entity.style.pinColor ?? '#c62828',
       lineProfile: entity.style.lineProfile ?? 'circle',
       modelUrl: entity.model3D?.modelUrl ?? '',
+      modelSize: entity.model3D?.scale?.x ?? 5,
+      modelHeading: entity.model3D?.rotation?.z ?? 0,
       description: entity.description ?? '',
     })
     setFormError(null)
@@ -122,8 +130,8 @@ export function SpatialEntityPanel({
         model3D: {
           enabled: !!draft.modelUrl,
           modelUrl: draft.modelUrl || undefined,
-          scale: existingEntity?.model3D?.scale ?? { x: 5, y: 5, z: 5 },
-          rotation: existingEntity?.model3D?.rotation ?? { x: 0, y: 0, z: 0 },
+          scale: { x: draft.modelSize, y: draft.modelSize, z: draft.modelSize },
+          rotation: { x: existingEntity?.model3D?.rotation?.x ?? 0, y: existingEntity?.model3D?.rotation?.y ?? 0, z: draft.modelHeading },
           altitudeOffset: existingEntity?.model3D?.altitudeOffset ?? 0,
         },
         metadata: existingEntity?.metadata ?? {
@@ -140,6 +148,11 @@ export function SpatialEntityPanel({
 
   return (
     <div className="panel-content">
+      {onClose && (
+        <button className="icon-button panel-close-button" type="button" onClick={onClose} title="Đóng panel">
+          <X size={16} />
+        </button>
+      )}
       <div className="panel-section-header">
         <div>
           <h2 className="section-title">Quản lý thực thể</h2>
@@ -150,11 +163,6 @@ export function SpatialEntityPanel({
             <Plus size={14} />
             Thêm thực thể
           </button>
-          {onClose && (
-            <button className="icon-button" type="button" onClick={onClose} title="Đóng panel">
-              <X size={16} />
-            </button>
-          )}
         </div>
       </div>
 
@@ -249,7 +257,9 @@ export function SpatialEntityPanel({
                         if (Array.isArray(arr) && arr.length >= 2) {
                           newText = `[${arr[0]}, ${arr[1]}, ${z}]`
                         }
-                      } catch {}
+                      } catch {
+                        newText = d.coordinatesText
+                      }
                     }
                     return { ...d, elevationZ: z, coordinatesText: newText }
                   })
@@ -291,13 +301,36 @@ export function SpatialEntityPanel({
                   if (!file) return
                   try {
                     const ref = await uploadModelFile(file)
-                    setDraft((d) => ({ ...d, modelUrl: ref.objectUrl }))
+                    setDraft((d) => ({ ...d, modelUrl: ref.objectUrl ?? '' }))
                   } catch (err) {
                     console.error('Lỗi upload mô hình:', err)
                     alert('Lỗi upload mô hình 3D')
                   }
                 }}
               />
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <label className="form-label">Size (m)</label>
+                  <input
+                    className="input h-9"
+                    type="number"
+                    min="0.1"
+                    step="0.5"
+                    value={draft.modelSize}
+                    onChange={(e) => setDraft((d) => ({ ...d, modelSize: Math.max(Number(e.target.value) || 0.1, 0.1) }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Heading</label>
+                  <input
+                    className="input h-9"
+                    type="number"
+                    step="1"
+                    value={draft.modelHeading}
+                    onChange={(e) => setDraft((d) => ({ ...d, modelHeading: Number(e.target.value) || 0 }))}
+                  />
+                </div>
+              </div>
               {draft.modelUrl && (
                 <p className="mt-1 text-xs text-[var(--color-success)] truncate">Mô hình: {draft.modelUrl}</p>
               )}

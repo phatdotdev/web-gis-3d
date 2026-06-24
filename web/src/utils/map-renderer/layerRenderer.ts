@@ -49,7 +49,6 @@ export function renderFeature(ctx: MapRenderContext, feature: NormalizedSpatialF
 }
 
 export function highlightFeature(ctx: MapRenderContext, feature: NormalizedSpatialFeature): void {
-  ctx.highlightLayer?.removeAll()
   const graphics = ctx.graphicIndex.get(feature.id)
   if (!graphics || !ctx.highlightLayer) {
     return

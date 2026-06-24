@@ -8,40 +8,18 @@ import SimpleLineSymbol from '@arcgis/core/symbols/SimpleLineSymbol'
 import SimpleMarkerSymbol from '@arcgis/core/symbols/SimpleMarkerSymbol'
 import type { LineProfile, NormalizedSpatialFeature, ResolvedSpatialStyle } from '../../types/map'
 import type { ResolvedModel3DConfig } from '../../types/model3d'
+import { createMapPinSymbol3D } from './pinSymbolFactory'
 
-type HighlightSymbol = SimpleMarkerSymbol | SimpleLineSymbol | SimpleFillSymbol
+type HighlightSymbol = PointSymbol3D | SimpleMarkerSymbol | SimpleLineSymbol | SimpleFillSymbol
+
+export { createMapPinSymbol3D }
 
 /**
  * Pin symbol đẹp — dùng PointSymbol3D + IconSymbol3DLayer cho SceneView,
  * hiển thị pin nổi trên mặt đất.
  */
 export function createPinSymbol3D(style: ResolvedSpatialStyle): PointSymbol3D {
-  return new PointSymbol3D({
-    symbolLayers: [
-      new IconSymbol3DLayer({
-        resource: { primitive: 'circle' },
-        material: { color: style.pinColor },
-        outline: {
-          color: '#ffffff',
-          size: 1.5,
-        },
-        size: 14,
-      }),
-    ],
-    verticalOffset: {
-      screenLength: 30,
-      maxWorldLength: 200,
-      minWorldLength: 20,
-    },
-    callout: {
-      type: 'line',
-      color: style.pinColor,
-      size: 1.2,
-      border: {
-        color: [255, 255, 255, 0.7],
-      },
-    } as any,
-  })
+  return createMapPinSymbol3D(style.pinColor, 34)
 }
 
 /**
@@ -107,12 +85,22 @@ export function createPolygonSymbol(style: ResolvedSpatialStyle): SimpleFillSymb
 
 export function createHighlightSymbol(feature: NormalizedSpatialFeature): HighlightSymbol {
   if (feature.geometryType === 'Point') {
-    return new SimpleMarkerSymbol({
-      color: '#ffffff',
-      size: 18,
-      outline: {
-        color: '#00897b',
-        width: 3,
+    return new PointSymbol3D({
+      symbolLayers: [
+        new IconSymbol3DLayer({
+          resource: { primitive: 'circle' },
+          material: { color: [0, 137, 123, 0.22] },
+          outline: {
+            color: '#00897b',
+            size: 2.5,
+          },
+          size: feature.model3D?.enabled ? 52 : 42,
+        }),
+      ],
+      verticalOffset: {
+        screenLength: feature.model3D?.enabled ? 8 : 24,
+        maxWorldLength: 180,
+        minWorldLength: 0,
       },
     })
   }

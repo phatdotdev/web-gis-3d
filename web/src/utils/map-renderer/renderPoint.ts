@@ -37,7 +37,20 @@ export function renderPointFeature(ctx: MapRenderContext, feature: NormalizedSpa
           },
         }),
       )
+    } else {
+      console.warn(`[map-renderer] Model 3D "${feature.name}" is enabled but modelUrl is missing.`, {
+        featureId: feature.id,
+        sourceType: feature.sourceType,
+        layerId: feature.layerId,
+        entityId: feature.entityId,
+      })
     }
+  } else if (feature.model3D?.modelUrl && feature.model3D.modelUrl !== '/data/models/default-point.glb') {
+    console.warn(`[map-renderer] Model 3D "${feature.name}" has modelUrl but model3D.enabled is false.`, {
+      featureId: feature.id,
+      sourceType: feature.sourceType,
+      modelUrl: feature.model3D.modelUrl,
+    })
   }
 
   ctx.graphicsLayer.add(pinGraphic)

@@ -30,7 +30,9 @@ export function useLayerManagement() {
   }, [])
 
   useEffect(() => {
-    void refreshLayers()
+    queueMicrotask(() => {
+      void refreshLayers()
+    })
   }, [refreshLayers])
 
   return {
