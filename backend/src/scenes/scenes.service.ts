@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
+import { existsSync } from 'fs';
+import { join, normalize, sep } from 'path';
 import { Scene3D } from './entities/scene-3d.entity';
 import { SpatialEntity } from '../spatial-entities/entities/spatial-entity.entity';
 import { CreateSceneDto } from './dto/create-scene.dto';
@@ -176,6 +178,49 @@ export class ScenesService {
     return parent;
   }
 
+  private async resolveRootScene(scene: Scene3D) {
+    let current = scene;
+    while (current.parent) {
+      const parent = await this.sceneRepository.findOne({
+        where: { id: current.parent.id },
+        relations: { parent: true },
+      });
+      if (!parent) break;
+      current = parent;
+    }
+    return current;
+  }
+
+  private resolveLocalSceneFilePath(fileUrl: string | null) {
+    if (!fileUrl) {
+      throw new BadRequestException('Scene node does not have a model file to split');
+    }
+    if (fileUrl.startsWith('http')) {
+      throw new BadRequestException('Remote scene files cannot be split directly');
+    }
+
+    const normalizedUrl = fileUrl.replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!normalizedUrl.startsWith('uploads/')) {
+      throw new BadRequestException('Scene file is not stored in the local uploads directory');
+    }
+
+    const uploadsRoot = normalize(join(process.cwd(), 'uploads'));
+    const relativePath = decodeURIComponent(normalizedUrl.replace(/^uploads\/?/, ''));
+    const filePath = normalize(join(uploadsRoot, relativePath));
+
+    const uploadsRootWithSeparator = uploadsRoot.endsWith(sep)
+      ? uploadsRoot
+      : `${uploadsRoot}${sep}`;
+    if (filePath !== uploadsRoot && !filePath.startsWith(uploadsRootWithSeparator)) {
+      throw new BadRequestException('Invalid scene file path');
+    }
+    if (!existsSync(filePath)) {
+      throw new NotFoundException('Scene model file was not found on disk');
+    }
+
+    return filePath;
+  }
+
   async create(createSceneDto: CreateSceneDto) {
     const parent = await this.resolveParent(createSceneDto.parentId);
     const scene = this.sceneRepository.create({
@@ -231,6 +276,14 @@ export class ScenesService {
   }
 
   async findByLodLevel(lodLevel: number) {
+    if (lodLevel === 0) {
+      return this.sceneRepository.find({
+        where: { lodLevel, parent: IsNull() },
+        relations: { parent: true, children: true, entities: true },
+        order: { sortOrder: 'ASC', name: 'ASC' },
+      });
+    }
+
     return this.sceneRepository.find({
       where: { lodLevel },
       relations: { parent: true, children: true, entities: true },
@@ -322,7 +375,7 @@ export class ScenesService {
           scale: child.scale,
           visible: true,
           sortOrder: 0,
-          metadata: {},
+          metadata: { rootSceneId: savedParent.id },
           parent: savedParent,
         });
       });
@@ -338,6 +391,100 @@ export class ScenesService {
       await this.sceneRepository.remove(parentScene);
       throw error;
     }
+  }
+
+  async splitSceneChildren(
+    parentId: string,
+    tempFilePath: string,
+    options: {
+      name?: string | null;
+      description?: string | null;
+      replaceExisting?: boolean;
+    } = {},
+  ) {
+    const parent = await this.sceneRepository.findOne({
+      where: { id: parentId },
+      relations: { parent: true, children: true },
+    });
+    if (!parent) {
+      throw new NotFoundException(`Scene ${parentId} not found`);
+    }
+
+    const rootScene = await this.resolveRootScene(parent);
+    const splitResults = await this.modelProcessorService.splitGltfAsLod(tempFilePath, parent.id);
+    if (splitResults.children.length === 0) {
+      throw new BadRequestException('No deeper mesh or material parts were found in this scene node');
+    }
+    const nextLodLevel = (parent.lodLevel ?? 0) + 1;
+
+    if (options.replaceExisting && parent.children?.length) {
+      await this.sceneRepository.remove(parent.children);
+      parent.children = [];
+    }
+
+    parent.metadata = {
+      ...(parent.metadata ?? {}),
+      rootSceneId: rootScene.id,
+      isSplit: true,
+      childSplitSourceUrl: splitResults.rootFileUrl,
+      childSplitName: options.name ?? parent.name,
+      childSplitDescription: options.description ?? null,
+    };
+    if (!parent.fileUrl) {
+      parent.fileUrl = splitResults.rootFileUrl;
+    }
+    await this.sceneRepository.save(parent);
+
+    const existingChildCount = parent.children?.length ?? 0;
+    const childScenes = splitResults.children.map((child, index) =>
+      this.sceneRepository.create({
+        name: child.name,
+        description: options.description ?? `Child mesh of ${parent.name}`,
+        fileUrl: child.fileUrl,
+        lodLevel: nextLodLevel,
+        position: child.position,
+        rotation: child.rotation,
+        scale: child.scale,
+        visible: true,
+        sortOrder: existingChildCount + index,
+        metadata: {
+          rootSceneId: rootScene.id,
+          splitParentId: parent.id,
+        },
+        parent,
+      }),
+    );
+
+    if (childScenes.length > 0) {
+      await this.sceneRepository.save(childScenes);
+      await this.syncChildSpatialEntities(parent.id);
+    }
+
+    return this.findOne(parent.id);
+  }
+
+  async splitExistingSceneChildren(
+    parentId: string,
+    options: {
+      name?: string | null;
+      description?: string | null;
+      replaceExisting?: boolean;
+    } = {},
+  ) {
+    const parent = await this.sceneRepository.findOne({
+      where: { id: parentId },
+      relations: { parent: true },
+    });
+    if (!parent) {
+      throw new NotFoundException(`Scene ${parentId} not found`);
+    }
+
+    const sourceFilePath = this.resolveLocalSceneFilePath(parent.fileUrl);
+    return this.splitSceneChildren(parent.id, sourceFilePath, {
+      name: options.name ?? `${parent.name} split`,
+      description: options.description ?? parent.description ?? null,
+      replaceExisting: options.replaceExisting,
+    });
   }
 
   async confirmPlacement(

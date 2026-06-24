@@ -470,6 +470,53 @@ export const uploadAndSplitScene = async (
   return (await response.json()) as BackendScene3D;
 };
 
+export const uploadAndSplitSceneChildren = async (
+  parentSceneId: string,
+  file: File,
+  name?: string,
+  description?: string,
+) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (name) {
+    formData.append("name", name);
+  }
+  if (description) {
+    formData.append("description", description);
+  }
+  const response = await fetch(
+    `${baseUrl}/scenes/${parentSceneId}/upload-and-split-children`,
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
+  if (!response.ok) {
+    throw new Error("Failed to upload and split scene children");
+  }
+  return (await response.json()) as BackendScene3D;
+};
+
+export const splitSceneNode = async (
+  sceneId: string,
+  payload: {
+    name?: string | null;
+    description?: string | null;
+    replaceExisting?: boolean;
+  } = {},
+) => {
+  const response = await fetch(`${baseUrl}/scenes/${sceneId}/split`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(message || "Failed to split scene node");
+  }
+  return (await response.json()) as BackendScene3D;
+};
+
 export const confirmScenePlacement = async (
   sceneId: string,
   placement: {

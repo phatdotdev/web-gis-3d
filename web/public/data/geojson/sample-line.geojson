@@ -1,0 +1,54 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "source": "local-sample",
+    "service_path": "demo/drainage",
+    "total_features": 2
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": 11,
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [105.7728, 10.0256],
+          [105.7772, 10.0274],
+          [105.7821, 10.0288],
+          [105.7875, 10.0301]
+        ]
+      },
+      "properties": {
+        "OBJECTID": 11,
+        "Ten": "Cong thoat nuoc Nguyen Trai",
+        "ChieuDai": 1680,
+        "TrangThai": "Quy hoach"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 12,
+      "geometry": {
+        "type": "MultiLineString",
+        "coordinates": [
+          [
+            [105.7794, 10.0218],
+            [105.7809, 10.0242],
+            [105.7835, 10.026]
+          ],
+          [
+            [105.7835, 10.026],
+            [105.7862, 10.0277],
+            [105.7901, 10.029]
+          ]
+        ]
+      },
+      "properties": {
+        "OBJECTID": 12,
+        "Ten": "Tuyen gom nuoc phia dong",
+        "ChieuDai": 2210,
+        "TrangThai": "Khao sat"
+      }
+    }
+  ]
+}

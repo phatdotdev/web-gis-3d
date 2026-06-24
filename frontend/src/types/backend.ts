@@ -67,15 +67,15 @@ export type BackendScene3D = {
   updatedAt?: string;
 };
 
-export type SceneLodLevel = 0 | 1 | 2;
+export type SceneLodLevel = number;
 
 export type SceneNode = {
   id: string;
-  sceneId: string;
+  rootSceneId: string;
   parentId?: string | null;
   name: string;
   lodLevel: SceneLodLevel;
-  modelUrl?: string | null;
+  fileUrl?: string | null;
   transform?: {
     position: { x: number; y: number; z: number };
     rotation: { x: number; y: number; z: number };
@@ -85,6 +85,8 @@ export type SceneNode = {
   source: BackendScene3D;
   parent?: BackendScene3D | { id: string; name?: string | null } | null;
   childCount?: number;
+  isSplit?: boolean;
+  canSplit?: boolean;
 };
 
 

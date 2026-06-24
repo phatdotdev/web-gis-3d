@@ -18,14 +18,14 @@ const isSceneGraphic = (graphic: Graphic | null | undefined): graphic is SceneGr
 export const findSceneGraphicForActiveLod = (
   results: readonly SceneHitResult[],
   sceneLayer: GraphicsLayer | null,
-  activeLodLevel: SceneLodLevel,
+  _activeLodLevel: SceneLodLevel,
 ) => {
   for (const result of results ?? []) {
     if (result.type !== "graphic") continue;
     const graphic = result.graphic;
     if (!graphic) continue;
     if (graphic.layer !== sceneLayer || !isSceneGraphic(graphic)) continue;
-    if (graphic.attributes.lodLevel === activeLodLevel) return graphic;
+    if (graphic.visible !== false) return graphic;
   }
 
   return null;

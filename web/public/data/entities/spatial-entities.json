@@ -1,0 +1,108 @@
+[
+  {
+    "entityId": "entity-tram-quan-trac",
+    "entityName": "Trạm quan trắc độc lập",
+    "description": "Point entity không thuộc layer.",
+    "geometry": {
+      "type": "Point",
+      "coordinates": [105.7826, 10.0315, 4]
+    },
+    "position": {
+      "longitude": 105.7826,
+      "latitude": 10.0315,
+      "z": 4
+    },
+    "visible": true,
+    "style": {
+      "pinColor": "#c62828",
+      "pinIcon": "sensor",
+      "lineColor": "#c62828",
+      "lineWidth": 3,
+      "lineHeight": 3,
+      "lineProfile": "circle",
+      "lineZ": 0,
+      "polygonFillColor": "#c62828",
+      "polygonOutlineColor": "#003865",
+      "polygonOpacity": 0.3
+    },
+    "model3D": {
+      "enabled": false,
+      "modelUrl": "/data/models/default-point.glb",
+      "scale": { "x": 5, "y": 5, "z": 5 },
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "altitudeOffset": 0
+    },
+    "metadata": {
+      "owner": "demo",
+      "status": "active"
+    }
+  },
+  {
+    "entityId": "entity-tuyen-cap-nuoc",
+    "entityName": "Tuyến cấp nước độc lập",
+    "description": "Line entity có pin đại diện tại centroid.",
+    "geometry": {
+      "type": "LineString",
+      "coordinates": [
+        [105.7742, 10.0321],
+        [105.7796, 10.0312],
+        [105.785, 10.0336]
+      ]
+    },
+    "visible": true,
+    "style": {
+      "pinColor": "#0079c1",
+      "pinIcon": "line",
+      "lineColor": "#0079c1",
+      "lineWidth": 5,
+      "lineHeight": 5,
+      "lineProfile": "quad",
+      "lineZ": 0,
+      "lineCap": "square"
+    },
+    "model3D": {
+      "enabled": false
+    },
+    "metadata": {
+      "owner": "demo",
+      "status": "planned"
+    }
+  },
+  {
+    "entityId": "entity-khu-du-an",
+    "entityName": "Khu dự án độc lập",
+    "description": "Polygon entity mẫu.",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [105.7882, 10.0247],
+          [105.7938, 10.0244],
+          [105.7944, 10.0204],
+          [105.7891, 10.0196],
+          [105.7882, 10.0247]
+        ]
+      ]
+    },
+    "visible": true,
+    "style": {
+      "pinColor": "#f57c00",
+      "pinIcon": "area",
+      "lineColor": "#f57c00",
+      "lineWidth": 2,
+      "lineHeight": 2,
+      "lineProfile": "circle",
+      "lineZ": 0,
+      "polygonFillColor": "#f57c00",
+      "polygonOutlineColor": "#004c97",
+      "polygonOpacity": 0.24
+    },
+    "model3D": {
+      "enabled": false
+    },
+    "metadata": {
+      "owner": "demo",
+      "status": "draft"
+    }
+  }
+]

@@ -1,0 +1,66 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "source": "local-sample",
+    "service_path": "demo/trees",
+    "total_features": 4
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": 1,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [105.7812, 10.0281]
+      },
+      "properties": {
+        "OBJECTID": 1,
+        "TenLoaiCay": "Sao den",
+        "DuongKinh": 38,
+        "TinhTrang": "Tot"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 2,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [105.7848, 10.0304]
+      },
+      "properties": {
+        "OBJECTID": 2,
+        "TenLoaiCay": "Bang lang",
+        "DuongKinh": 25,
+        "TinhTrang": "Theo doi"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 3,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [105.7779, 10.0322]
+      },
+      "properties": {
+        "OBJECTID": 3,
+        "TenLoaiCay": "Dau",
+        "DuongKinh": 42,
+        "TinhTrang": "Tot"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 4,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [105.789, 10.0265]
+      },
+      "properties": {
+        "OBJECTID": 4,
+        "TenLoaiCay": "Mai chieu thuy",
+        "DuongKinh": 18,
+        "TinhTrang": "Moi trong"
+      }
+    }
+  ]
+}

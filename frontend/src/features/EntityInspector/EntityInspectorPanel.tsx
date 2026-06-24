@@ -14,6 +14,7 @@ import {
   Image,
   Boxes,
   Layers3,
+  Scissors,
 } from "lucide-react";
 
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
@@ -24,6 +25,7 @@ import {
   updateEntity,
   selectSceneInteraction,
   setSceneLodLevel,
+  setSceneEditingNodeId,
 } from "../../store/mapSlice";
 import type { BackendSpatialEntity, SceneLodLevel } from "../../types/backend";
 import { fmtCoord, getEntityCenter } from "../../utils/geometry";
@@ -31,6 +33,7 @@ import {
   backendHost,
   uploadEntityImage,
   removeEntityImage,
+  splitSceneNode,
   updateScene,
 } from "../../utils/backendApi";
 
@@ -266,6 +269,8 @@ export const EntityInspectorPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>("info");
   const [editMetadata, setEditMetadata] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
+  const [splittingNode, setSplittingNode] = useState(false);
+  const [splitError, setSplitError] = useState<string | null>(null);
   const [showImagesOnly, setShowImagesOnly] = useState(false);
   const [isDetailedOpen, setIsDetailedOpen] = useState(false);
 
@@ -274,6 +279,7 @@ export const EntityInspectorPanel: React.FC = () => {
     if (entity) {
       setActiveTab("info");
       setEditMetadata(entity.metadata ?? {});
+      setSplitError(null);
       setShowImagesOnly(false);
       setIsDetailedOpen(false);
     }
@@ -336,6 +342,50 @@ export const EntityInspectorPanel: React.FC = () => {
     [entity, dispatch],
   );
 
+  const handleSplitSelectedSceneNode = useCallback(async () => {
+    if (!entity || entity.type !== "scene_node") return;
+
+    const rootSceneId = String(entity.metadata?.rootSceneId ?? entity.sceneId ?? entity.id);
+    const currentNodeLod = Number(entity.metadata?.lodLevel ?? 0);
+    const nextLodLevel = currentNodeLod + 1;
+
+    setSplittingNode(true);
+    setSplitError(null);
+    try {
+      const updatedNode = await splitSceneNode(entity.id, {
+        name: `${entity.name ?? "Scene node"} split`,
+      });
+
+      dispatch(setSceneLodLevel({ sceneId: rootSceneId, lodLevel: nextLodLevel }));
+      dispatch(setSceneEditingNodeId(updatedNode.children?.[0]?.id ?? updatedNode.id));
+      dispatch(
+        setInspectedEntity({
+          ...entity,
+          metadata: {
+            ...(entity.metadata ?? {}),
+            activeLodLevel: nextLodLevel,
+            childCount: updatedNode.children?.length ?? entity.metadata?.childCount ?? 0,
+            isSplit: true,
+            rootSceneId,
+          },
+          scene: updatedNode,
+        }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("scene3d:reload", { detail: { parentId: entity.id } }),
+      );
+    } catch (err) {
+      console.error("Failed to split scene node:", err);
+      setSplitError(
+        err instanceof Error
+          ? err.message
+          : "Khong the chia cat node nay.",
+      );
+    } finally {
+      setSplittingNode(false);
+    }
+  }, [entity, dispatch]);
+
   if (!entity) return null;
 
   const center = getEntityCenter(entity.geometry);
@@ -382,7 +432,7 @@ export const EntityInspectorPanel: React.FC = () => {
         </div>
 
         {/* Mini Actions Row */}
-        <div className="grid grid-cols-3 gap-2 p-2.5 bg-calcite-bg-1 border-b border-calcite-border-2 shrink-0">
+        <div className={`${isSceneNode ? "grid-cols-4" : "grid-cols-3"} grid gap-2 p-2.5 bg-calcite-bg-1 border-b border-calcite-border-2 shrink-0`}>
           <button
             onClick={handleGoTo}
             disabled={!center}
@@ -392,6 +442,21 @@ export const EntityInspectorPanel: React.FC = () => {
             <Crosshair size={13} className="text-calcite-text-2" />
             <span>Phóng tới</span>
           </button>
+          {isSceneNode && (
+            <button
+              onClick={() => void handleSplitSelectedSceneNode()}
+              disabled={splittingNode || !entity.modelUrl}
+              className="flex flex-col items-center justify-center gap-1 py-2 px-1 text-[11px] font-semibold text-calcite-text-2 bg-calcite-bg-2 border border-calcite-border-2 rounded-sm hover:text-calcite-brand hover:border-calcite-brand hover:bg-calcite-bg-3 transition-all cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Chia cat node dang chon thanh cac node con"
+            >
+              {splittingNode ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Scissors size={13} />
+              )}
+              <span>Chia cat</span>
+            </button>
+          )}
           <button
             onClick={() => setShowImagesOnly(!showImagesOnly)}
             disabled={entity.type === "scene_node"}
@@ -449,6 +514,11 @@ export const EntityInspectorPanel: React.FC = () => {
                 );
               })}
             </div>
+            {splitError && (
+              <div className="mt-2 rounded-sm border border-red-200 bg-red-50 px-2 py-1.5 text-[10.5px] font-medium text-red-700">
+                {splitError}
+              </div>
+            )}
           </div>
         )}
 
@@ -575,6 +645,25 @@ export const EntityInspectorPanel: React.FC = () => {
                           </span>
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleSplitSelectedSceneNode()}
+                        disabled={splittingNode || !entity.modelUrl}
+                        className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-sm border border-calcite-brand bg-calcite-bg-2 px-3 py-2 text-[12px] font-semibold text-calcite-brand hover:bg-calcite-bg-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Chia cat node nay thanh cac node con LOD tiep theo"
+                      >
+                        {splittingNode ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <Scissors size={13} />
+                        )}
+                        Chia cat node nay
+                      </button>
+                      {splitError && (
+                        <div className="rounded-sm border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-700">
+                          {splitError}
+                        </div>
+                      )}
                     </div>
                   )}
 

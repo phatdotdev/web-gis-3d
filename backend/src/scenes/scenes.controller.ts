@@ -129,6 +129,55 @@ export class ScenesController {
     }
   }
 
+  @Post(':id/upload-and-split-children')
+  @UseInterceptors(sceneUploadInterceptor)
+  async uploadAndSplitChildren(
+    @Param('id') id: string,
+    @UploadedFile() file: Multer.File,
+    @Body('name') name?: string,
+    @Body('description') description?: string,
+    @Body('replaceExisting') replaceExisting?: string,
+  ) {
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+
+    try {
+      const result = await this.scenesService.splitSceneChildren(
+        id,
+        file.path,
+        {
+          name: name || null,
+          description: description || null,
+          replaceExisting: replaceExisting === 'true',
+        },
+      );
+      try {
+        unlinkSync(file.path);
+      } catch (err) {}
+      return result;
+    } catch (error) {
+      try {
+        unlinkSync(file.path);
+      } catch (err) {}
+      throw error;
+    }
+  }
+
+  @Post(':id/split')
+  splitExistingNode(
+    @Param('id') id: string,
+    @Body('name') name?: string,
+    @Body('description') description?: string,
+    @Body('replaceExisting') replaceExisting?: boolean,
+  ) {
+    return this.scenesService.splitExistingSceneChildren(id, {
+      name: name || null,
+      description: description || null,
+      replaceExisting: replaceExisting === true,
+    });
+  }
+
   @Get()
   findAll(@Query('lodLevel') lodLevel?: string) {
     if (lodLevel !== undefined) {

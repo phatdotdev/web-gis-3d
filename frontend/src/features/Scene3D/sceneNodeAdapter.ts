@@ -1,7 +1,9 @@
 import type { BackendScene3D, BackendSpatialEntity, SceneLodLevel, SceneNode } from "../../types/backend";
 
 export const normalizeLodLevel = (value: unknown): SceneLodLevel => {
-  return value === 1 || value === 2 ? value : 0;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) return 0;
+  return Math.floor(numeric);
 };
 
 export const getSceneParentId = (scene: BackendScene3D) => scene.parent?.id ?? null;
@@ -11,13 +13,14 @@ export const toSceneNode = (
   parent?: BackendScene3D | null,
 ): SceneNode => {
   const lodLevel = normalizeLodLevel(scene.lodLevel);
+  const childCount = scene.children?.length ?? 0;
   return {
     id: scene.id,
-    sceneId: lodLevel === 0 ? scene.id : parent?.id ?? scene.parent?.id ?? scene.id,
+    rootSceneId: lodLevel === 0 ? scene.id : String(scene.metadata?.rootSceneId ?? scene.id),
     parentId: parent?.id ?? scene.parent?.id ?? null,
     name: scene.name,
     lodLevel,
-    modelUrl: scene.fileUrl ?? null,
+    fileUrl: scene.fileUrl ?? null,
     transform: {
       position: scene.position ?? { x: 0, y: 0, z: 0 },
       rotation: scene.rotation ?? { x: 0, y: 0, z: 0 },
@@ -26,7 +29,9 @@ export const toSceneNode = (
     metadata: scene.metadata ?? {},
     source: scene,
     parent: parent ?? scene.parent ?? null,
-    childCount: scene.children?.length ?? 0,
+    childCount,
+    isSplit: childCount > 0,
+    canSplit: Boolean(scene.fileUrl),
   };
 };
 
@@ -80,6 +85,10 @@ export const createSceneBreadcrumb = (
   scene: BackendScene3D,
   parent?: BackendScene3D | null,
 ) => {
+  const metadataBreadcrumb = scene.metadata?.breadcrumb;
+  if (typeof metadataBreadcrumb === "string" && metadataBreadcrumb.trim()) {
+    return metadataBreadcrumb;
+  }
   if (!parent || normalizeLodLevel(scene.lodLevel) === 0) return scene.name;
   return `${parent.name} > ${scene.name}`;
 };

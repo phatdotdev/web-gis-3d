@@ -1,0 +1,120 @@
+[
+  {
+    "layerId": "local-cay-xanh",
+    "layerName": "Cây xanh mẫu",
+    "description": "Layer Point lấy từ GeoJSON local.",
+    "sourceType": "local-geojson",
+    "geojsonFile": "/data/geojson/sample-point.geojson",
+    "geometryType": "Point",
+    "visible": true,
+    "style": {
+      "pinColor": "#00897b",
+      "pinIcon": "tree",
+      "lineColor": "#00897b",
+      "lineWidth": 2,
+      "lineHeight": 2,
+      "lineProfile": "circle",
+      "lineZ": 0,
+      "polygonFillColor": "#00897b",
+      "polygonOutlineColor": "#003865",
+      "polygonOpacity": 0.35
+    },
+    "model3D": {
+      "enabled": false,
+      "modelUrl": "/data/models/default-point.glb",
+      "scale": { "x": 6, "y": 6, "z": 6 },
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "altitudeOffset": 0
+    },
+    "metadata": {
+      "owner": "frontend-only-demo",
+      "sourceLabel": "Local GeoJSON"
+    }
+  },
+  {
+    "layerId": "local-cong-thoat-nuoc",
+    "layerName": "Cống/đường mẫu",
+    "description": "Layer LineString và MultiLineString mẫu.",
+    "sourceType": "local-geojson",
+    "geojsonFile": "/data/geojson/sample-line.geojson",
+    "geometryType": "LineString",
+    "visible": true,
+    "style": {
+      "pinColor": "#004c97",
+      "pinIcon": "route",
+      "lineColor": "#004c97",
+      "lineWidth": 4,
+      "lineHeight": 4,
+      "lineProfile": "circle",
+      "lineZ": 0,
+      "lineCap": "round"
+    },
+    "model3D": {
+      "enabled": false
+    },
+    "metadata": {
+      "owner": "frontend-only-demo",
+      "sourceLabel": "Local GeoJSON"
+    }
+  },
+  {
+    "layerId": "local-dia-phan",
+    "layerName": "Địa phận mẫu",
+    "description": "Layer Polygon và MultiPolygon mẫu.",
+    "sourceType": "local-geojson",
+    "geojsonFile": "/data/geojson/sample-polygon.geojson",
+    "geometryType": "Polygon",
+    "visible": true,
+    "style": {
+      "pinColor": "#f57c00",
+      "pinIcon": "polygon",
+      "lineColor": "#f57c00",
+      "lineWidth": 2,
+      "lineHeight": 2,
+      "lineProfile": "circle",
+      "lineZ": 0,
+      "polygonFillColor": "#f57c00",
+      "polygonOutlineColor": "#003865",
+      "polygonOpacity": 0.28
+    },
+    "model3D": {
+      "enabled": false
+    },
+    "metadata": {
+      "owner": "frontend-only-demo",
+      "sourceLabel": "Local GeoJSON"
+    }
+  },
+  {
+    "layerId": "qhc-cay-xanh",
+    "layerName": "QHC Cây Xanh",
+    "description": "Remote ArcGIS query endpoint. Có thể lỗi CORS tùy cấu hình server.",
+    "sourceType": "arcgis-query-url",
+    "geojsonUrl": "https://gisserver.cantho.gov.vn:6443/arcgis/rest/services/_SoXayDung/QHC_CayXanh/MapServer/0/query",
+    "geometryType": "Point",
+    "visible": false,
+    "style": {
+      "pinColor": "#2e7d32",
+      "pinIcon": "tree",
+      "lineColor": "#2e7d32",
+      "lineWidth": 2,
+      "lineHeight": 2,
+      "lineProfile": "circle",
+      "lineZ": 0,
+      "polygonFillColor": "#2e7d32",
+      "polygonOutlineColor": "#003865",
+      "polygonOpacity": 0.3
+    },
+    "model3D": {
+      "enabled": false,
+      "modelUrl": "/data/models/default-point.glb",
+      "scale": { "x": 5, "y": 5, "z": 5 },
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "altitudeOffset": 0
+    },
+    "metadata": {
+      "sourceLabel": "ArcGIS Query URL",
+      "city": "Cần Thơ"
+    }
+  }
+]

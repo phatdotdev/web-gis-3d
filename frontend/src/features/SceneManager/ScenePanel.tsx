@@ -18,6 +18,7 @@ import {
   XCircle,
   MousePointerClick,
   Box,
+  Scissors,
 } from "lucide-react";
 
 import type { BackendScene3D, BackendSpatialEntity } from "../../types/backend";
@@ -30,6 +31,7 @@ import {
   updateSceneTransform,
   confirmScenePlacement,
   fetchSpatialEntity,
+  uploadAndSplitSceneChildren,
 } from "../../utils/backendApi";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import {
@@ -48,6 +50,7 @@ import {
   updatePlacementPreview,
   selectInspectedEntity,
   setInspectedEntity,
+  setSplitTargetNodeId,
 } from "../../store/mapSlice";
 
 type FormState = {
@@ -58,7 +61,7 @@ type FormState = {
   visible: boolean;
 };
 
-type ScenePanelMode = "list" | "create" | "edit";
+type ScenePanelMode = "list" | "create" | "edit" | "split";
 
 const emptyForm: FormState = {
   name: "",
@@ -148,8 +151,8 @@ const convertSceneToVirtualEntity = (scene: BackendScene3D, allScenes: BackendSc
   };
 };
 
-const emitSceneReload = () => {
-  window.dispatchEvent(new Event("scene3d:reload"));
+const emitSceneReload = (parentId?: string) => {
+  window.dispatchEvent(new CustomEvent("scene3d:reload", { detail: { parentId } }));
 };
 
 export const ScenePanel: React.FC = () => {
@@ -164,6 +167,7 @@ export const ScenePanel: React.FC = () => {
   const [scenes, setScenes] = useState<BackendScene3D[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingScene, setEditingScene] = useState<BackendScene3D | null>(null);
+  const [splitTargetScene, setSplitTargetScene] = useState<BackendScene3D | null>(null);
   const [panelMode, setPanelMode] = useState<ScenePanelMode>("list");
   const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
@@ -172,6 +176,7 @@ export const ScenePanel: React.FC = () => {
   const [uploadName, setUploadName] = useState("");
   const [uploadDesc, setUploadDesc] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [splittingNode, setSplittingNode] = useState(false);
   // Manual transform edit state
   const [transformPos, setTransformPos] = useState({ x: 0, y: 0, z: 0 });
   const [transformRot, setTransformRot] = useState({ x: 0, y: 0, z: 0 });
@@ -217,6 +222,8 @@ export const ScenePanel: React.FC = () => {
   const closeSceneForm = () => {
     setPanelMode("list");
     setEditingScene(null);
+    setSplitTargetScene(null);
+    dispatch(setSplitTargetNodeId(null));
     setForm(emptyForm);
     setError(null);
   };
@@ -224,6 +231,8 @@ export const ScenePanel: React.FC = () => {
   const startCreate = () => {
     setPanelMode("create");
     setEditingScene(null);
+    setSplitTargetScene(null);
+    dispatch(setSplitTargetNodeId(null));
     setForm(emptyForm);
     setError(null);
   };
@@ -231,6 +240,8 @@ export const ScenePanel: React.FC = () => {
   const startEdit = (scene: BackendScene3D) => {
     setPanelMode("edit");
     setEditingScene(scene);
+    setSplitTargetScene(null);
+    dispatch(setSplitTargetNodeId(null));
     setError(null);
     setForm({
       name: scene.name,
@@ -241,6 +252,18 @@ export const ScenePanel: React.FC = () => {
     });
   };
 
+  const startSplit = (scene: BackendScene3D) => {
+    setPanelMode("split");
+    setEditingScene(null);
+    setSplitTargetScene(scene);
+    dispatch(setSplitTargetNodeId(scene.id));
+    dispatch(setSceneEditingNodeId(scene.id));
+    setUploadName(`${scene.name} detail`);
+    setUploadDesc("");
+    setSelectedFile(null);
+    setError(null);
+  };
+
   // Submit create/update basic scene info
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -249,10 +272,14 @@ export const ScenePanel: React.FC = () => {
       return;
     }
     setError(null);
+    const parentScene = form.parentId
+      ? scenes.find((scene) => scene.id === form.parentId)
+      : null;
     const payload = {
       name: form.name.trim(),
       description: form.description.trim() || null,
       parentId: form.parentId || null,
+      lodLevel: parentScene ? (parentScene.lodLevel ?? 0) + 1 : 0,
       sortOrder: form.sortOrder,
       visible: form.visible,
     };
@@ -268,6 +295,41 @@ export const ScenePanel: React.FC = () => {
     } catch (err) {
       console.error(err);
       setError("Không lưu được scene.");
+    }
+  };
+
+  const handleUploadSplitChildren = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!splitTargetScene) return;
+    if (!selectedFile) {
+      setError("Vui long chon file 3D (.glb/.gltf) de split tiep.");
+      return;
+    }
+
+    setSplittingNode(true);
+    setError(null);
+    try {
+      const updatedParent = await uploadAndSplitSceneChildren(
+        splitTargetScene.id,
+        selectedFile,
+        uploadName.trim() || splitTargetScene.name,
+        uploadDesc.trim() || undefined,
+      );
+      setSelectedFile(null);
+      setUploadDesc("");
+      setExpandedIds((prev) => new Set(prev).add(splitTargetScene.id));
+      const firstChild = updatedParent.children?.[0];
+      dispatch(setSceneEditingNodeId(firstChild?.id ?? splitTargetScene.id));
+      dispatch(setSplitTargetNodeId(null));
+      setSplitTargetScene(null);
+      setPanelMode("list");
+      await loadScenes();
+      emitSceneReload(splitTargetScene.id);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Khong the split tiep node nay.");
+    } finally {
+      setSplittingNode(false);
     }
   };
 
@@ -513,6 +575,17 @@ export const ScenePanel: React.FC = () => {
                 <MapPin size={10} />
               </button>
             )}
+            {node.fileUrl && (
+              <button
+                onClick={() => startSplit(node)}
+                className={`w-5 h-5 inline-flex items-center justify-center rounded text-[#64748b] hover:text-[#0f766e] hover:bg-[#f0fdfa] cursor-pointer ${
+                  splitTargetScene?.id === node.id ? "text-[#0f766e] bg-[#f0fdfa]" : ""
+                }`}
+                title="Split tiep node nay"
+              >
+                <Scissors size={10} />
+              </button>
+            )}
             {node.lodLevel === 0 && (
               <button
                 onClick={() => startEdit(node)}
@@ -554,7 +627,11 @@ export const ScenePanel: React.FC = () => {
             Quay lại danh sách
           </button>
           <span className="text-[11px] font-bold text-[#2563eb] bg-[#eff6ff] px-2 py-1 rounded">
-            {panelMode === "create" ? "Thêm scene" : "Sửa scene"}
+            {panelMode === "create"
+              ? "Them scene"
+              : panelMode === "split"
+                ? "Split tiep"
+                : "Sua scene"}
           </span>
         </div>
       )}
@@ -610,6 +687,73 @@ export const ScenePanel: React.FC = () => {
           <MapPin size={13} />
           Chọn vị trí trên bản đồ
         </button>
+        </form>
+      )}
+
+      {panelMode === "split" && splitTargetScene && (
+        <form
+          onSubmit={handleUploadSplitChildren}
+          className="border border-[#ccfbf1] bg-white rounded-lg p-3.5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.02)]"
+        >
+          <div className="flex items-center gap-2 text-[#134e4a] font-bold text-sm">
+            <Scissors size={16} className="text-[#0f766e]" />
+            Split tiep node: {splitTargetScene.name}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[11px] text-[#475569]">
+            <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-2.5 py-2">
+              LOD hien tai: <strong>LOD{splitTargetScene.lodLevel ?? 0}</strong>
+            </div>
+            <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-2.5 py-2">
+              Node con moi: <strong>LOD{(splitTargetScene.lodLevel ?? 0) + 1}</strong>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className={labelClasses}>File 3D dung de split tiep</label>
+            <input
+              type="file"
+              accept=".glb,.gltf"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              className="text-[12px] file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-[11.5px] file:font-semibold file:bg-[#f0fdfa] file:text-[#0f766e] hover:file:bg-[#ccfbf1] file:cursor-pointer"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
+              <label className={labelClasses}>Ten lan split</label>
+              <input
+                className={inputClasses}
+                value={uploadName}
+                onChange={(e) => setUploadName(e.target.value)}
+                placeholder="Vi du: Bo PC detail"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={labelClasses}>Mo ta</label>
+              <input
+                className={inputClasses}
+                value={uploadDesc}
+                onChange={(e) => setUploadDesc(e.target.value)}
+                placeholder="Thong tin split..."
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="p-2 text-[11.5px] bg-[#fef2f2] border border-[#fecaca] text-[#dc2626] rounded-lg">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={splittingNode}
+            className="inline-flex items-center justify-center gap-1.5 py-2 px-3 text-[12.5px] font-semibold border border-transparent rounded-lg cursor-pointer bg-[#0f766e] text-white hover:bg-[#115e59] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {splittingNode ? <Loader2 size={13} className="animate-spin" /> : <Scissors size={13} />}
+            Tao node con tu file nay
+          </button>
         </form>
       )}
 
@@ -884,7 +1028,7 @@ export const ScenePanel: React.FC = () => {
             >
               <option value="">Không có</option>
               {scenes
-                .filter((scene) => scene.id !== editingScene?.id && scene.lodLevel === 0)
+                .filter((scene) => scene.id !== editingScene?.id)
                 .map((scene) => (
                   <option key={scene.id} value={scene.id}>
                     {scene.name}

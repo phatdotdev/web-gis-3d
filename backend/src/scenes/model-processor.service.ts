@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { NodeIO, getBounds } from '@gltf-transform/core';
+import { NodeIO, getBounds, type Node, type Scene } from '@gltf-transform/core';
 import { prune, flatten } from '@gltf-transform/functions';
 import { KHRDracoMeshCompression } from '@gltf-transform/extensions';
 import draco3d from 'draco3dgltf';
@@ -181,6 +181,214 @@ export class ModelProcessorService {
       rootFileUrl,
       children: splitResults,
     };
+  }
+
+  async splitGltfAsLod(
+    sourceFilePath: string,
+    parentId: string,
+  ): Promise<{ rootFileUrl: string; children: SplitResult[] }> {
+    const io = await this.getIO();
+    const document = await io.read(sourceFilePath);
+
+    // Treat the selected node's GLB as a local LOD model. Flatten first so
+    // nested wrappers from earlier splits do not hide real mesh nodes.
+    await document.transform(flatten({ cleanup: false }));
+
+    const scenes = document.getRoot().listScenes();
+    const scene = document.getRoot().getDefaultScene() || scenes[0];
+    if (!scene) {
+      throw new Error('No scene found in glTF file');
+    }
+
+    const outputDirName = `scenes/${parentId}`;
+    const outputDir = join(process.cwd(), 'uploads', outputDirName);
+    mkdirSync(outputDir, { recursive: true });
+
+    const rootFileName = `lod-source.glb`;
+    const rootFilePath = join(outputDir, rootFileName);
+    const flattenedBuffer = await io.writeBinary(document);
+    writeFileSync(rootFilePath, Buffer.from(flattenedBuffer));
+    const rootFileUrl = `/uploads/${outputDirName}/${rootFileName}`;
+
+    const meshNodes = scene
+      .listChildren()
+      .filter((node) => node.getMesh() !== null);
+
+    let splitResults: SplitResult[] = [];
+
+    if (meshNodes.length >= 2) {
+      this.logger.log(
+        `LOD split: found ${meshNodes.length} mesh nodes. Splitting selected node model by mesh node...`,
+      );
+      splitResults = await this.splitFlattenedByMeshNodes(
+        flattenedBuffer,
+        io,
+        meshNodes.length,
+        outputDir,
+        outputDirName,
+      );
+    } else {
+      this.logger.log(
+        `LOD split: found ${meshNodes.length} mesh node. Falling back to material split...`,
+      );
+      splitResults = await this.splitFlattenedByMaterials(
+        flattenedBuffer,
+        io,
+        outputDir,
+        outputDirName,
+      );
+    }
+
+    return {
+      rootFileUrl,
+      children: splitResults,
+    };
+  }
+
+  private getFiniteCenter(node: Node | Scene) {
+    const box = getBounds(node);
+    if (box && isFinite(box.min[0]) && isFinite(box.max[0])) {
+      return {
+        x: (box.min[0] + box.max[0]) / 2,
+        y: (box.min[1] + box.max[1]) / 2,
+        z: (box.min[2] + box.max[2]) / 2,
+      };
+    }
+    return { x: 0, y: 0, z: 0 };
+  }
+
+  private async splitFlattenedByMeshNodes(
+    flattenedBuffer: Uint8Array,
+    io: NodeIO,
+    nodeCount: number,
+    outputDir: string,
+    outputDirName: string,
+  ): Promise<SplitResult[]> {
+    const splitResults: SplitResult[] = [];
+    const usedFileNames = new Set<string>();
+
+    for (let i = 0; i < nodeCount; i++) {
+      try {
+        const childDoc = await io.readBinary(flattenedBuffer);
+        const clonedScenes = childDoc.getRoot().listScenes();
+        const clonedScene = childDoc.getRoot().getDefaultScene() || clonedScenes[0];
+        const meshNodes = clonedScene
+          .listChildren()
+          .filter((node) => node.getMesh() !== null);
+        const targetNode = meshNodes[i];
+        if (!targetNode) continue;
+
+        const childName = targetNode.getName() || `Node_${i}`;
+
+        for (const node of clonedScene.listChildren()) {
+          if (node !== targetNode) {
+            node.detach();
+          }
+        }
+
+        const center = this.getFiniteCenter(targetNode);
+        const wrapperNode = childDoc.createNode(`${childName}_wrapper`);
+        clonedScene.addChild(wrapperNode);
+
+        targetNode.detach();
+        wrapperNode.addChild(targetNode);
+        wrapperNode.setTranslation([-center.x, -center.y, -center.z]);
+
+        await childDoc.transform(prune());
+
+        const glbBuffer = await io.writeBinary(childDoc);
+        const childFileName = this.createUniqueFileName(childName, usedFileNames);
+        const childFilePath = join(outputDir, childFileName);
+
+        writeFileSync(childFilePath, Buffer.from(glbBuffer));
+
+        splitResults.push({
+          name: childName,
+          fileUrl: `/uploads/${outputDirName}/${childFileName}`,
+          position: center,
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+        });
+      } catch (err: any) {
+        this.logger.error(`Error processing LOD mesh node at index ${i}: ${err.message}`);
+      }
+    }
+
+    return splitResults;
+  }
+
+  private async splitFlattenedByMaterials(
+    flattenedBuffer: Uint8Array,
+    io: NodeIO,
+    outputDir: string,
+    outputDirName: string,
+  ): Promise<SplitResult[]> {
+    const document = await io.readBinary(flattenedBuffer);
+    const materials = document.getRoot().listMaterials();
+    const splitResults: SplitResult[] = [];
+    const usedFileNames = new Set<string>();
+
+    if (materials.length <= 1) {
+      this.logger.warn('LOD split found fewer than two materials; no deeper parts can be produced.');
+      return splitResults;
+    }
+
+    for (let i = 0; i < materials.length; i++) {
+      const materialName = materials[i].getName() || `Material_${i}`;
+
+      try {
+        const childDoc = await io.readBinary(flattenedBuffer);
+        const clonedRoot = childDoc.getRoot();
+        const clonedMaterial = clonedRoot.listMaterials()[i];
+        const clonedScenes = clonedRoot.listScenes();
+        const clonedScene = clonedRoot.getDefaultScene() || clonedScenes[0];
+        let hasGeometry = false;
+
+        for (const mesh of clonedRoot.listMeshes()) {
+          for (const prim of mesh.listPrimitives()) {
+            if (prim.getMaterial() !== clonedMaterial) {
+              prim.dispose();
+            } else {
+              hasGeometry = true;
+            }
+          }
+        }
+
+        if (!hasGeometry) continue;
+
+        const center = this.getFiniteCenter(clonedScene);
+        const wrapperNode = childDoc.createNode(`${materialName}_wrapper`);
+        clonedScene.addChild(wrapperNode);
+
+        const clonedChildren = [...clonedScene.listChildren()];
+        for (const child of clonedChildren) {
+          if (child === wrapperNode) continue;
+          child.detach();
+          wrapperNode.addChild(child);
+        }
+        wrapperNode.setTranslation([-center.x, -center.y, -center.z]);
+
+        await childDoc.transform(prune());
+
+        const glbBuffer = await io.writeBinary(childDoc);
+        const childFileName = this.createUniqueFileName(materialName, usedFileNames);
+        const childFilePath = join(outputDir, childFileName);
+
+        writeFileSync(childFilePath, Buffer.from(glbBuffer));
+
+        splitResults.push({
+          name: materialName,
+          fileUrl: `/uploads/${outputDirName}/${childFileName}`,
+          position: center,
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+        });
+      } catch (err: any) {
+        this.logger.error(`Error processing LOD material ${materialName}: ${err.message}`);
+      }
+    }
+
+    return splitResults;
   }
 
   private async splitByNodes(

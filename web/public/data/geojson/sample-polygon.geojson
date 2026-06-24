@@ -1,0 +1,54 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "source": "local-sample",
+    "service_path": "demo/admin-areas",
+    "total_features": 2
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": 21,
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [105.7718, 10.0338],
+            [105.7812, 10.0356],
+            [105.784, 10.0297],
+            [105.7756, 10.0272],
+            [105.7718, 10.0338]
+          ]
+        ]
+      },
+      "properties": {
+        "OBJECTID": 21,
+        "tenHuyen": "Khu vuc Ninh Kieu A",
+        "dienTichTuNhien": 267
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 22,
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [
+          [
+            [
+              [105.7848, 10.0349],
+              [105.7925, 10.0342],
+              [105.7936, 10.0282],
+              [105.7864, 10.0275],
+              [105.7848, 10.0349]
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "OBJECTID": 22,
+        "tenHuyen": "Khu vuc Ninh Kieu B",
+        "dienTichTuNhien": 184
+      }
+    }
+  ]
+}

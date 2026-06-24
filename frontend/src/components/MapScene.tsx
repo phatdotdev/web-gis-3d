@@ -61,6 +61,7 @@ import {
   setSceneEditingNodeId,
   selectPlacementFileUrl,
   selectSceneLodLevelsBySceneId,
+  selectActiveLodLevel,
 } from "../store/mapSlice";
 import {
   createBackendLayer,
@@ -351,6 +352,7 @@ const MapScene = () => {
   const inspectedEntity = useAppSelector(selectInspectedEntity);
   const placementFileUrl = useAppSelector(selectPlacementFileUrl);
   const sceneLodLevelsBySceneId = useAppSelector(selectSceneLodLevelsBySceneId);
+  const activeSceneLodLevel = useAppSelector(selectActiveLodLevel);
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<Map | null>(null);
@@ -1404,7 +1406,7 @@ const MapScene = () => {
             const rootSceneId = String(
               attrs.rootSceneId ?? rootScene.id ?? scene.id,
             );
-            const activeLodLevel = sceneLodLevelsBySceneId[rootSceneId] ?? 0;
+            const activeLodLevel = sceneLodLevelsBySceneId[rootSceneId] ?? activeSceneLodLevel;
             const point = clickedSceneGraphic.geometry as Point;
             const virtualEntity: BackendSpatialEntity = {
               id: scene.id,
@@ -1426,10 +1428,11 @@ const MapScene = () => {
               metadata: {
                 ...(scene.metadata ?? {}),
                 activeLodLevel,
-                breadcrumb: parentScene?.name
-                  ? `${parentScene.name} > ${scene.name}`
-                  : scene.name,
-                childCount: scene.children?.length ?? 0,
+                breadcrumb: attrs.breadcrumb ??
+                  (parentScene?.name
+                    ? `${parentScene.name} > ${scene.name}`
+                    : scene.name),
+                childCount: attrs.childCount ?? scene.children?.length ?? 0,
                 lodLevel: scene.lodLevel ?? 0,
                 parentSceneId: parentScene?.id ?? null,
                 parentSceneName: parentScene?.name ?? null,
@@ -1468,6 +1471,7 @@ const MapScene = () => {
     editorOpen,
     editorTool,
     sceneLodLevelsBySceneId,
+    activeSceneLodLevel,
     dispatch,
   ]);
 

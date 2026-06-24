@@ -25,13 +25,14 @@ import type { RootState } from "./store";
 type LayerStatus = "loading" | "ready" | "error";
 export type EditorTool = "select" | "place-model" | "draw-extrude" | "draw-ground";
 export type EditorFeatureKind = "model" | "extrude" | "ground";
-export type SceneLodLevel = 0 | 1 | 2;
+export type SceneLodLevel = number;
 
 export type SceneInteractionState = {
   activeSceneId: string | null;
   activeLodLevel: SceneLodLevel;
   activeLodLevelsBySceneId: Record<string, SceneLodLevel>;
   selectedSceneNodeId: string | null;
+  splitTargetNodeId: string | null;
   hoveredSceneNodeId?: string | null;
 };
 
@@ -308,6 +309,7 @@ const initialState: MapState = {
     activeLodLevel: 0,
     activeLodLevelsBySceneId: {},
     selectedSceneNodeId: null,
+    splitTargetNodeId: null,
     hoveredSceneNodeId: null,
   },
   placementMode: false,
@@ -476,6 +478,9 @@ const mapSlice = createSlice({
     setSelectedSceneNodeId(state, action) {
       state.sceneInteraction.selectedSceneNodeId = action.payload as string | null;
     },
+    setSplitTargetNodeId(state, action) {
+      state.sceneInteraction.splitTargetNodeId = action.payload as string | null;
+    },
     setHoveredSceneNodeId(state, action) {
       state.sceneInteraction.hoveredSceneNodeId = action.payload as string | null;
     },
@@ -608,6 +613,7 @@ export const {
   setActiveLodLevel,
   setSceneLodLevel,
   setSelectedSceneNodeId,
+  setSplitTargetNodeId,
   setHoveredSceneNodeId,
   startPlacement,
   updatePlacementPreview,
@@ -659,6 +665,8 @@ export const selectSceneLodLevelsBySceneId = (s: RootState) =>
   s.map.sceneInteraction.activeLodLevelsBySceneId;
 export const selectSelectedSceneNodeId = (s: RootState) =>
   s.map.sceneInteraction.selectedSceneNodeId;
+export const selectSplitTargetNodeId = (s: RootState) =>
+  s.map.sceneInteraction.splitTargetNodeId;
 export const selectHoveredSceneNodeId = (s: RootState) =>
   s.map.sceneInteraction.hoveredSceneNodeId;
 export const selectPlacementMode = (s: RootState) => s.map.placementMode;

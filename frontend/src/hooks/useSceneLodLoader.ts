@@ -5,7 +5,7 @@ import type SceneView from "@arcgis/core/views/SceneView";
 import type { BackendScene3D } from "../types/backend";
 import { fetchScenesByLod } from "../utils/backendApi";
 import { useAppSelector } from "../store/hooks";
-import { selectSceneLodLevelsBySceneId } from "../store/mapSlice";
+import { selectActiveLodLevel, selectSceneLodLevelsBySceneId } from "../store/mapSlice";
 import { SceneLodRenderer } from "../features/Scene3D/SceneLodRenderer";
 
 export const useSceneLodLoader = (
@@ -13,14 +13,20 @@ export const useSceneLodLoader = (
   graphicsLayerRef: React.RefObject<GraphicsLayer | null>,
 ) => {
   const activeLodLevelsBySceneId = useAppSelector(selectSceneLodLevelsBySceneId);
+  const activeLodLevel = useAppSelector(selectActiveLodLevel);
   const [rootScenes, setRootScenes] = useState<BackendScene3D[]>([]);
   const rendererRef = useRef<SceneLodRenderer | null>(null);
 
   useEffect(() => {
     let active = true;
 
-    const load = () => {
-      rendererRef.current?.clearDataCache();
+    const load = (event?: Event) => {
+      const parentId = (event as CustomEvent<{ parentId?: string }> | undefined)?.detail?.parentId;
+      if (parentId) {
+        rendererRef.current?.invalidateBranch(parentId);
+      } else {
+        rendererRef.current?.clearDataCache();
+      }
       fetchScenesByLod(0)
         .then((data) => {
           if (active) setRootScenes(data);
@@ -49,7 +55,7 @@ export const useSceneLodLoader = (
     let cancelled = false;
     const syncRenderer = async () => {
       // Changing LOD updates graphic visibility and hit-test targets only.
-      await rendererRef.current?.sync(rootScenes, activeLodLevelsBySceneId);
+      await rendererRef.current?.sync(rootScenes, activeLodLevelsBySceneId, activeLodLevel);
     };
 
     void syncRenderer().catch((err) => {
@@ -59,7 +65,7 @@ export const useSceneLodLoader = (
     return () => {
       cancelled = true;
     };
-  }, [viewRef, graphicsLayerRef, rootScenes, activeLodLevelsBySceneId]);
+  }, [viewRef, graphicsLayerRef, rootScenes, activeLodLevelsBySceneId, activeLodLevel]);
 
   useEffect(() => {
     return () => {

@@ -1,0 +1,11 @@
+{
+  "center": {
+    "longitude": 105.7821,
+    "latitude": 10.0298,
+    "z": 1800
+  },
+  "tilt": 62,
+  "heading": 0,
+  "basemap": "topo-vector",
+  "ground": "world-elevation"
+}
